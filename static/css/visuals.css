@@ -1,0 +1,26 @@
+/* Teaching diagrams: parts animate in on screen; final state = printed picture. */
+.vis { margin: 12px 0; padding: 12px; background: #fff; border: 1px solid #E7E4DC; border-radius: 14px; break-inside: avoid; }
+.vis-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; color: #1C1E21; }
+.vis-cap { font-size: 13px; color: #4A4E55; margin-top: 6px; line-height: 1.6; }
+.vis-box { overflow-x: auto; cursor: pointer; }
+.vis-box svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+
+.va { animation-duration: .6s; animation-delay: var(--d, 0s); animation-fill-mode: both; animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+.va-fade { animation-name: va-fade; }
+.va-pop { animation-name: va-pop; transform-box: fill-box; transform-origin: center; }
+.va-grow { animation-name: va-grow; transform-box: fill-box; transform-origin: left center; }
+.va-draw { animation-name: va-draw; animation-duration: .9s; }
+.va-move { animation-name: va-move; animation-duration: 1.2s; transform-box: fill-box; transform-origin: center; }
+.va-drive { animation-name: va-move; animation-duration: 2.6s; animation-timing-function: linear; }
+.va-tilt { animation-name: va-tilt; animation-duration: 1.4s; }
+@keyframes va-fade { from { opacity: 0; } }
+@keyframes va-pop { from { opacity: 0; transform: scale(.4); } }
+@keyframes va-grow { from { opacity: 0; transform: scaleX(0); } }
+@keyframes va-draw { from { stroke-dashoffset: var(--len, 600); } to { stroke-dashoffset: 0; } }
+@keyframes va-move { from { transform: translate(var(--fx, 0), var(--fy, 0)) rotate(var(--fr, 0deg)); } }
+@keyframes va-tilt { 0% { transform: rotate(-9deg); } 60% { transform: rotate(3deg); } 100% { transform: rotate(0); } }
+
+/* Print and reduced motion: show the finished picture. */
+.static .va, .vis-static .va { animation: none !important; }
+@media print { .va { animation: none !important; } .vis { border-color: #bbb; } }
+@media (prefers-reduced-motion: reduce) { .va { animation: none !important; } }

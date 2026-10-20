@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head><meta charset="utf-8"><title>png</title></head>
+<body>
+<pre id="out"></pre>
+<script type="module">
+// Turns many diagrams into PNG pictures in one go (for Word files): each diagram's
+// SVG — its final, non-animated state — is drawn on a canvas at 2×. Only the Pi's
+// own headless Chromium opens this page; the result is read from the page text.
+import { visualHtml } from '/static/js/visuals.js';
+const k = new URLSearchParams(location.search).get('k');
+const list = await (await fetch(`/api/vrender/${encodeURIComponent(k)}`)).json();
+const out = [];
+for (const v of list) {
+  try {
+    const box = document.createElement('div');
+    box.innerHTML = visualHtml(v);
+    const svg = box.querySelector('svg');
+    if (!svg) { out.push(null); continue; }
+    const vb = (svg.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+    let w = Number(svg.getAttribute('width')) || vb[2] || 560, h = Number(svg.getAttribute('height')) || vb[3] || 300;
+    const up = Math.max(1, 900 / w);  // small figures drawn larger so Word gets a sharp picture
+    w *= up; h *= up;
+    svg.setAttribute('width', w); svg.setAttribute('height', h);
+    const src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = src; });
+    const c = document.createElement('canvas');
+    c.width = w * 2; c.height = h * 2;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(img, 0, 0, c.width, c.height);
+    out.push({ png: c.toDataURL('image/png').split(',')[1], w, h });
+  } catch (e) { out.push(null); }
+}
+document.getElementById('out').textContent = '@@PNGS@@' + JSON.stringify(out) + '@@END@@'; // @ never appears in base64
+document.title = 'ready';
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# the family's own data: database, backups, scanned exam photos, generated papers
+data/
+# example papers generated from a real (copyrighted) mock exam
+samples/
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# local junk
+*.bak*
+*.log
+.DS_Store
+.env

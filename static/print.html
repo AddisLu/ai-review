@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>列印</title>
+<link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="/static/css/visuals.css">
+<script src="/static/vendor/katex/katex.min.js"></script>
+<script src="/static/vendor/katex/auto-render.min.js"></script>
+<style id="pagecss"></style>
+<style>
+  :root { --fs: 14pt; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "DFKai-SB", "BiauKai", "Kaiti TC", "TW-Kai", "AR PL UKai TW", "Noto Serif CJK TC", "Noto Sans CJK TC", "PingFang TC", serif; color: #000; font-size: var(--fs); line-height: 1.75; background: #fff; }
+  .sheet { padding: 0; }
+  .title { text-align: center; font-size: 1.5em; font-weight: bold; margin: 0 0 .2em; }
+  .subtitle { text-align: center; margin-bottom: .4em; }
+  .info { display: flex; justify-content: center; gap: 2.2em; margin: .2em 0 .8em; font-size: .95em; }
+  .info span { white-space: nowrap; }
+  .score { border: 1.5px solid #000; padding: 0 1.2em; }
+  table.form { width: 100%; border-collapse: collapse; margin: .3em 0 .6em; font-size: .92em; }
+  table.form th, table.form td { border: 1px solid #000; padding: .15em .4em; text-align: center; font-weight: normal; height: 1.9em; }
+  table.form th { white-space: nowrap; width: 1%; }
+  table.form td.w { width: 30%; }
+  table.form.scores th, table.form.scores td { width: auto; }
+  .instr { font-size: .92em; margin: 0 0 .6em; padding: .3em .6em; border: 1px dashed #666; }
+  .cols2 { column-count: 2; column-gap: 9mm; column-rule: 1px solid #bbb; }
+  .section { font-weight: bold; margin: .8em 0 .3em; break-after: avoid; }
+  .q { break-inside: avoid; margin: 0 0 .75em; display: flex; gap: .3em; }
+  .q .br { flex-shrink: 0; white-space: nowrap; }
+  .q .n { font-weight: bold; flex-shrink: 0; min-width: 1.6em; }
+  .q .b { flex: 1; min-width: 0; }
+  .stem { text-align: justify; }
+  .opts { display: grid; gap: .1em 1em; margin-top: .2em; }
+  .opts.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .opts.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .opts.c1 { grid-template-columns: 1fr; }
+  .opts b { font-weight: normal; }
+  .qrow { display: flex; gap: 1em; align-items: flex-start; }
+  .qrow .qtext { flex: 1; min-width: 0; }
+  .qfig { margin: .35em 0; }
+  .qfig.side { flex: 0 0 36%; margin: 0; }
+  .qfig.side img { max-width: 100%; max-height: 55mm; }
+  .qfig.side .qsvg svg { width: 100%; max-width: 100%; max-height: 55mm; }  /* an SVG with only a viewBox needs a width */
+  .fig { display: block; max-width: 80%; max-height: 70mm; margin: .2em 0; }
+  .qsvg svg { display: block; width: 100%; max-width: 13cm; max-height: 72mm; height: auto; }
+  .qtable { border-collapse: collapse; margin: .3em 0; font-size: .92em; }
+  .qtable th, .qtable td { border: 1px solid #000; padding: .1em .55em; text-align: center; }
+  .qtable th { font-weight: normal; background: #f2f2f2; }
+  .onotes { margin-top: .2em; font-size: .95em; }
+  .keygrid { width: 100%; border-collapse: collapse; }
+  .keygrid td { border: 1px solid #000; padding: .2em .5em; width: 20%; vertical-align: top; }
+  .keygrid td b { margin-right: .2em; }
+  .keygrid th { text-align: left; background: #f2f2f2; border: 1px solid #000; padding: .15em .5em; font-weight: bold; }
+  .space { border-bottom: 1px dotted #999; height: 1.75em; }
+  .src { font-size: .7em; color: #666; }
+  .ans { color: #c00; font-weight: bold; }
+  .exp { font-size: .88em; color: #1d3b8b; margin-top: .2em; }
+  .exp ol { margin: .1em 0; padding-left: 1.4em; }
+  .keyhead { break-before: page; text-align: center; font-size: 1.3em; font-weight: bold; margin-bottom: .6em; }
+  .keyhead.first { break-before: auto; }
+  body.preview .keyhead.first { border-top: 0; padding-top: 0; margin-top: 0; }
+  .exp .qvis { max-width: 88%; }
+  ruby rt { font-size: .5em; }
+  /* 注音 (ui.zhuyin): the character in a 1em cell, the symbols stacked on its right, the tone mark beside
+     the last symbol, 輕聲 ˙ on top. In 直書 the 注音 sits in the space between columns (the character
+     stays in line with the others); in 橫書 it takes its own room after the character. */
+  .zy { position: relative; display: inline-block; width: 1.16em; height: 1em; line-height: 1; vertical-align: -.13em; writing-mode: horizontal-tb; text-indent: 0; margin-right: .7em; }
+  .zy-c { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+  .zy-c.zy-box { width: 1.1em; height: 1.1em; margin: .07em .03em; border: 1.4px solid currentColor; box-sizing: border-box; }
+  .zy-r { position: absolute; left: 100%; top: -.12em; height: 1.24em; display: flex; align-items: center; padding-left: .04em; pointer-events: none; }
+  .zy-p, .zy-t { display: grid; font-size: .37em; grid-auto-rows: 1.02em; align-content: center; height: 3.35em; font-style: normal; font-weight: normal; }
+  .zy-p i { font-style: normal; display: block; width: 1.05em; text-align: center; line-height: 1.02em; }
+  .zy-t { width: .6em; }
+  .zy-t i { font-style: normal; line-height: 1; font-size: 1.1em; margin-top: -.12em; }
+  .zy1 .zy-t { grid-template-rows: repeat(1, 1.02em); } .zy2 .zy-t { grid-template-rows: repeat(2, 1.02em); }
+  .zy3 .zy-t { grid-template-rows: repeat(3, 1.02em); } .zy4 .zy-t { grid-template-rows: repeat(4, 1.02em); }
+  .zyl.zy1 .zy-t { grid-template-rows: repeat(2, 1.02em); } .zyl.zy2 .zy-t { grid-template-rows: repeat(3, 1.02em); } .zyl.zy3 .zy-t { grid-template-rows: repeat(4, 1.02em); }
+  .zy-l { font-size: 1em; line-height: .8em !important; }
+  .vbody .zy, .vstem .zy { margin-right: 0; vertical-align: middle; }
+  .box-blank { display: inline-block; width: 1.1em; height: 1.1em; border: 1px solid #000; vertical-align: -.15em; }
+  /* 直書 pages (verticalPages in print.js) */
+  .vpage { position: relative; break-after: page; overflow: hidden; margin: 0 auto; }
+  .vpage:last-child { break-after: auto; }
+  #vpart .vpage:first-child { break-before: page; }
+  body.preview .vpage { box-shadow: 0 1px 6px rgba(0,0,0,.15); margin-bottom: 8mm; background: #fff; }
+  .vbody { writing-mode: vertical-rl; text-orientation: mixed; width: 100%; height: calc(100% - 7mm); overflow: hidden; line-height: 2.05; }
+  .vfoot { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-size: 9pt; }
+  .vhead { margin-left: 1.2em; padding-left: .8em; border-left: 1px solid #000; }
+  .vtitle { font-size: 1.45em; font-weight: bold; letter-spacing: .1em; }
+  .vsub { font-size: 1.05em; }
+  .vinfo { font-size: .95em; margin-right: .4em; }
+  .vsec { font-weight: bold; margin-left: .3em; }
+  .vq { margin-left: .9em; }
+  .vgrid { display: flex; flex-flow: row wrap; inline-size: 100%; align-items: flex-start; }
+  .vgrid > .vq { min-inline-size: 48%; max-inline-size: 100%; padding-inline-end: 1.2em; box-sizing: border-box; }
+  .vgrid > .vans { inline-size: 100%; }
+  .vn { font-weight: bold; margin-bottom: .3em; display: inline-block; }
+  .vopts { display: block; margin-right: .2em; }
+  .vopt { margin-bottom: 1.2em; display: inline-block; }
+  .vans { color: #c00; margin-left: .6em; }
+  .vfig { writing-mode: horizontal-tb; display: inline-block; max-height: 60mm; }
+  .vfig img, .vfig svg { max-height: 60mm; max-width: 80mm; }
+  .tcy { text-combine-upright: all; }
+  .upr { text-orientation: upright; }
+  .vertical ruby rt { font-size: .45em; }
+  .vbody:has(.zy) { line-height: 2.35; }
+  /* 看注音寫國字: a big box to write in and, beside it, the 注音 in a narrow framed cell (like school papers) */
+  .zy.zyb { width: 1.62em; height: 1.62em; vertical-align: -.45em; margin-right: .78em; }
+  .zy.zyb .zy-c.zy-box { width: 100%; height: 100%; margin: 0; }
+  .zy.zyb .zy-r { padding: 0 .04em; border: 1.4px solid currentColor; border-left: 0; box-sizing: border-box; }
+  .zy.zyb .zy-p, .zy.zyb .zy-t { font-size: .42em; height: 3.7em; }
+  .zy.zyb .zy-t { width: .55em; }
+  .vbody .zy.zyb, .vstem .zy.zyb { margin-right: 0; vertical-align: middle; }
+  .vbody:has(.zyb) { line-height: 2.75; }
+  .zy.zyb .zy-r { top: 0; height: 100%; }
+  .vbody .zy:not(.zyb), .vstem .zy:not(.zyb) { height: 1.24em; } .vbody .zy-r, .vstem .zy-r { top: 0; height: 100%; }
+  .imgpage { break-after: page; display: flex; align-items: center; justify-content: center; height: var(--ph); }
+  .imgpage:last-child { break-after: auto; }
+  .imgpage img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .bw img { filter: grayscale(1) contrast(1.35) brightness(1.05); }
+  .bm { margin: .3em 0; }
+  .lesson { break-after: page; }
+  .lesson h2 { font-size: 1.25em; margin: 0 0 .4em; text-align: center; }
+  .lesson .intro { text-align: center; margin-bottom: .8em; }
+  .concept { border: 1.5px solid #333; border-radius: 10px; padding: .6em .9em; margin-bottom: .8em; break-inside: avoid; }
+  .concept h3 { margin: 0 0 .3em; font-size: 1.08em; }
+  .concept .rule { font-weight: bold; margin: .3em 0; padding: .2em .6em; background: #f3f3f3; border-radius: 6px; display: inline-block; }
+  .concept .ex { margin-top: .3em; }
+  .concept .refs { font-size: .8em; color: #555; }
+  .concept .two { display: grid; grid-template-columns: 1.1fr 1fr; gap: .8em; align-items: start; }
+  .tips { border-top: 1px dashed #999; padding-top: .4em; font-size: .92em; }
+  .vis { padding: 4px; margin: 4px 0; border-color: #ccc; }
+  .vis-title { font-size: .85em; } .vis-cap { font-size: .8em; }
+  .vis-box svg { max-height: 62mm; }
+  .qvis { max-width: 75%; }
+  /* screen preview: show the sheet like paper */
+  @media screen {
+    body.preview { background: #e5e7eb; padding: 12px; }
+    body.preview .sheet { background: #fff; width: var(--pw); margin: 0 auto; padding: 12mm; box-shadow: 0 2px 10px rgba(0,0,0,.15); min-height: var(--ph); }
+    body.preview .keyhead { border-top: 2px dashed #94a3b8; padding-top: 10mm; margin-top: 10mm; }
+    body.preview .imgpage { height: auto; margin-bottom: 12px; border-bottom: 2px dashed #94a3b8; padding-bottom: 12px; }
+    #msg { text-align: center; color: #64748b; padding: 40px; font-family: sans-serif; }
+  }
+</style>
+</head>
+<body>
+<div id="msg">載入中…</div>
+<div class="sheet" id="sheet"></div>
+<script type="module" src="/static/js/print.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+[Unit]
+Description=AI 總複習學習站 (FastAPI)
+After=network-online.target cups.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=addis
+WorkingDirectory=/home/addis/Coding/ai-review
+ExecStart=/home/addis/Coding/ai-review/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

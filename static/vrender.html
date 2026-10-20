@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>render</title>
+<link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="/static/css/app.css">
+<link rel="stylesheet" href="/static/css/visuals.css">
+<script src="/static/vendor/katex/katex.min.js"></script>
+<script src="/static/vendor/katex/auto-render.min.js"></script>
+<style>body{margin:0;background:#fff} #v{width:640px;padding:16px;box-sizing:border-box}</style>
+</head>
+<body class="static">
+<div id="v"></div>
+<script type="module">
+// Draws one diagram exactly as a child sees it (final, non-animated state) so the
+// AI can look at the picture itself when checking it. Only reachable from the Pi.
+import { visualHtml } from '/static/js/visuals.js';
+const k = new URLSearchParams(location.search).get('k');
+const r = await fetch(`/api/vrender/${encodeURIComponent(k)}`);
+const v = await r.json();
+const html = visualHtml(v);
+document.getElementById('v').innerHTML = html;
+if (window.renderMathInElement) window.renderMathInElement(document.getElementById('v'), { delimiters: [{ left: '$', right: '$', display: false }], throwOnError: false });
+await fetch(`/api/vrender/${encodeURIComponent(k)}/done`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ drawn: !!html && !!document.querySelector('#v svg, #v .vis-box *') }) });
+document.title = 'ready';
+</script>
+</body>
+</html>
