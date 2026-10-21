@@ -21,7 +21,7 @@ function draw(main) {
   const tfMarks = kit.marks.length >= 2 ? kit.marks : ['○', '✕'];
   html(main, `
   <div class="page-head" style="margin-bottom:12px">
-    <a href="#/bank" class="back" id="qback" aria-label="返回">${icon('back', 22)}</a>
+    <a href="#/bank?view=q" class="back" id="qback" aria-label="返回">${icon('back', 22)}</a>
     <div class="grow sub" style="margin:0">${esc(q.subject)}・${esc(q.unit || '未分類')}・${esc(q.qtype)}${q.exam_title ? `・<a href="#/exam/${q.exam_id}">${esc(q.exam_title)}</a> 第 ${esc(q.number)} 題` : ''}</div>
     <button class="icon-btn" id="fav" aria-label="收藏" title="收藏" style="${q.is_favorite ? 'color:var(--pri)' : ''}">${icon('heart', 20)}</button>
     ${q.can_edit ? `<button class="icon-btn" data-act="edit" aria-label="編輯" title="編輯">${icon('edit', 20)}</button>` : ''}
@@ -344,7 +344,7 @@ function bind(main) {
     try {
       await del(`/api/questions/${q.id}`);
       toast('已刪除', 'ok');
-      if (window.__fromHash) history.back(); else location.hash = '#/bank';
+      if (window.__fromHash) history.back(); else location.hash = '#/bank?view=q';
     } catch (err) { errToast(err); }
   };
   $('#fav').onclick = async (e) => {

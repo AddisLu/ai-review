@@ -1,11 +1,11 @@
-// 題庫 → 已拍的考卷 (#/bank?view=exams): every exam photographed, newest scan first, found by tapping
+// 題庫 → 已拍的考卷 (#/bank, the page 題庫 opens on): every exam photographed, newest scan first, found by tapping
 // chips or typing part of its name. It used to sit beside the camera on 掃描; it lives here now.
 import { get, post, state, thumbUrl, waitJob } from '../api.js';
 import { $, SUBJECT_META, errToast, esc, fmtDate, html, icon, localDay, subjectColor, termStart, toast } from '../ui.js';
 import { EXAMS_HREF, checkWatched } from './scan.js';
 
 // the tabs of 題庫: 找題目 (banksearch.js) and 已拍的考卷 (here)
-export const bankTabs = (on) => `<nav class="seg bk-tabs" aria-label="題庫">${[['q', '#/bank', '找題目'], ['exams', EXAMS_HREF, '已拍的考卷']]
+export const bankTabs = (on) => `<nav class="seg bk-tabs" aria-label="題庫">${[['exams', EXAMS_HREF, '已拍的考卷'], ['q', '#/bank?view=q', '找題目']]
   .map(([k, href, l]) => `<a href="${href}" class="${on === k ? 'on' : ''}" ${on === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>`;
 
 // a parent who picked a child sees (and regenerates) that child's exams; on her own record, the family's
@@ -220,7 +220,7 @@ export async function loadExams() {
   });
   if (exams.some((e) => e.status === 'processing')) {  // only while one is being read (the list shows nothing else that changes)
     clearTimeout(loadExams._t);
-    loadExams._t = setTimeout(() => location.hash === EXAMS_HREF && loadExams(), 4000);
+    loadExams._t = setTimeout(() => ['#/bank', '#/bank?view=exams'].includes(location.hash) && loadExams(), 4000);
   }
 }
 

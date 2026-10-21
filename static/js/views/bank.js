@@ -20,11 +20,12 @@ const PRESETS = [
   ['全部題目', { flags: '', flags_any: '' }],
 ];
 
-// #/bank: the concept view (what to work on, practise at once); #/bank?… : every question, filtered
+// #/bank: 已拍的考卷 (the 書櫃) first; #/bank?view=q: 找題目; #/bank?view=analysis: 弱點分析;
+// #/bank?… with filters (subject, unit, view=list…): every question, filtered
 export async function render(main) {
   const hashQ = new URLSearchParams(location.hash.split('?')[1] || '');
   if (hashQ.get('view') === 'analysis') return (await import('./bankhome.js')).render(main);
-  if (hashQ.get('view') === 'exams') return (await import('./exams.js')).render(main);  // 已拍的考卷
+  if (![...hashQ.keys()].length || hashQ.get('view') === 'exams') return (await import('./exams.js')).render(main);  // 已拍的考卷
   return (await import('./banksearch.js')).render(main);  // 題庫: search first
 }
 

@@ -169,7 +169,7 @@ function draw(main) {
   const tile = (v, ico, title, sub, extra = '') => `<button class="ex-tile ${extra}" data-v="${v}"><span class="ex-ti">${ico}</span><span class="ex-tt"><b>${title}</b><span>${sub}</span></span>${icon('chev', 18)}</button>`;
   html(main, `
   <div class="page-head ex-head">
-    <a href="#/bank?view=exams" class="back" aria-label="返回">${icon('back', 22)}</a>
+    <a href="#/bank" class="back" aria-label="返回">${icon('back', 22)}</a>
     <div class="grow"><h1>${esc(exam.title)}</h1>
       <div class="sub">${ownerHtml()}${(exam.options || {}).school ? `<button class="tag school-tag" id="exschool" title="${esc((exam.options || {}).school_why || '學校考卷')}">🏫 學校考卷${(exam.options || {}).school_term ? `・${esc(exam.options.school_term)}` : ''}</button> · ` : ''}${esc(exam.subject || '未分類')} · ${exam.exam_date || ''} · ${exam.pages.length} 頁 · ${c.all} 題${(exam.template || {}).kind_name ? ` · ${esc(exam.template.kind_name)}` : ''}</div></div>
     <button class="icon-btn" id="exset" aria-label="這份考卷的設定" title="設定（改名、刪除）">${icon('edit', 20)}</button>
@@ -326,7 +326,7 @@ function bindOwner(main) {
 async function deleteExam() {
   const fix = exam.questions.filter((q) => q.is_wrong).length;
   if (!await confirmBox(`刪除「${esc(exam.title)}」？<br><span class="small muted">${exam.pages.length} 頁照片和 ${exam.questions.length} 題${fix ? `（含錯題 ${fix} 題）` : ''}、作答紀錄都會刪掉，不能復原。<br>只想讓它不出現在題庫：把「加入題庫」關掉就好，考卷和批改會留著。</span>`, '刪除', true)) return;
-  try { await del(`/api/exams/${exam.id}`); toast('已刪除', 'ok'); location.hash = '#/bank?view=exams'; } catch (e) { errToast(e); }
+  try { await del(`/api/exams/${exam.id}`); toast('已刪除', 'ok'); location.hash = '#/bank'; } catch (e) { errToast(e); }
 }
 
 function settingsMenu(main) {

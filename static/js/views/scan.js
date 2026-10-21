@@ -39,7 +39,7 @@ const MODE_HINT = {
 };
 
 // the exams photographed are listed in 題庫 → 已拍的考卷 (views/exams.js), not here
-export const EXAMS_HREF = '#/bank?view=exams';
+export const EXAMS_HREF = '#/bank';  // 題庫 opens on 已拍的考卷
 const EXAMS_LINK = `<div class="group" style="margin-top:12px"><a class="gi" href="${EXAMS_HREF}"><span class="t">已拍的考卷（在「題庫」裡）</span>${icon('chev', 16)}</a></div>`;
 
 // a parent scanning: whose exam is it? (a parent's own record never holds a scanned exam)
