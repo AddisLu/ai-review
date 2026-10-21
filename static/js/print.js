@@ -182,10 +182,23 @@ async function main() {
   await Promise.all([...sheet.querySelectorAll('img')].map((im) => im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; })));
   if (document.fonts) await document.fonts.ready;
   if (P.get('preview')) {
-    // Fit the A4 sheet into the preview panel.
-    const fit = () => { document.body.style.zoom = Math.min(1, (window.innerWidth - 24) / sheet.offsetWidth); };
+    // Fit the A4 sheet into the preview panel — on a phone (a narrow frame) the sheet is laid out
+    // again at that width instead (直書 pages keep their fixed boxes, shrunk). The page holding the
+    // preview is told how tall it is, so the frame needs no scrollbar of its own.
+    const fit = () => {
+      // clientWidth: the room there really is (innerWidth grows with the sheet on a phone that overflows)
+      const vw = document.documentElement.clientWidth || window.innerWidth;
+      const narrow = vw < 600 && !document.body.classList.contains('vertical');
+      document.body.classList.toggle('narrow', narrow);
+      document.body.style.zoom = narrow ? '' : Math.min(1, (vw - 24) / sheet.offsetWidth);
+      if (window.parent !== window) {
+        const h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+        window.parent.postMessage({ type: 'paper-size', t: tok, h }, location.origin);
+      }
+    };
     fit();
     window.addEventListener('resize', fit);
+    setTimeout(fit, 400);  // fonts and pictures that came in a moment later
   }
   document.body.dataset.ready = '1';
   if (P.get('auto')) setTimeout(() => window.print(), 300);

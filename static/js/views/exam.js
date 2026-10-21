@@ -552,13 +552,15 @@ function drawPages(main) {
   const showGen = async (box) => {
     if (box.dataset.done) return;
     box.dataset.done = '1';
-    // the photo first (it is what tells whether the page was taken well), then the preview
+    // the paper is asked for at once; on a computer the sharp photo is shown first (it is what tells
+    // whether the page was taken well) — a phone shows the small photo and does not wait
+    const making = specFor(Number(box.dataset.pgen));
     const img = box.closest('.card').querySelector('.page-view img');
-    if (img && img.dataset.hi) {
+    if (img && img.dataset.hi && !narrow()) {
       await new Promise((r) => { img.addEventListener('sharp', r, { once: true }); img.addEventListener('error', r, { once: true }); setTimeout(r, 5000); });
     }
     try {
-      const tok = await specFor(Number(box.dataset.pgen));
+      const tok = await making;
       box.innerHTML = tok ? `<iframe title="重新產生的電子試卷" src="/print.html?t=${tok}&preview=1"></iframe>`
         : '<div class="small muted" style="padding:20px">這一頁沒有題目可以產生（可以用「框選新增」補上，或換一張拍得清楚的）</div>';
     } catch (e) { box.innerHTML = `<div class="small" style="padding:20px">${esc(e.message)}</div>`; }
@@ -649,9 +651,19 @@ function drawPages(main) {
     const el = e.target.nextElementSibling;
     e.target.remove();
     bind(el);
-  }), { rootMargin: '1500px' });
+  }), { rootMargin: narrow() ? '500px' : '1500px' });  // a phone: not several previews at once
   body.querySelectorAll('[data-lazy]').forEach((x) => lazy.observe(x));
 }
+const narrow = () => window.matchMedia('(max-width: 700px)').matches;
+// each preview (print.html in a frame) says how tall it is: the frame grows to it — no scrolling inside
+// a frame on a phone. The 放大看 window keeps its own height (it scrolls itself).
+window.addEventListener('message', (ev) => {
+  const d = ev.data;
+  if (ev.origin !== location.origin || !d || d.type !== 'paper-size' || !d.t) return;
+  document.querySelectorAll('.pg-gen iframe').forEach((f) => {
+    if (f.src.includes(`t=${d.t}`)) f.style.height = `${Math.max(240, Math.min(d.h + 4, 20000))}px`;
+  });
+});
 
 
 

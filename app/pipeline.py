@@ -1809,7 +1809,9 @@ async def upgrade_question(qid: int) -> dict:
         db.update("questions", qid, {"upgraded_at": "skipped " + db.now()})  # nothing to compare with: not taken again
         return {"skipped": "沒有原稿影像"}
     fig_png = _png(fig) if fig is not None else None
-    res = await ai.upgrade_question(q, _png(region), fig_png)
+    ex = db.one("SELECT options FROM exams WHERE id=?", (q["exam_id"],)) if q.get("exam_id") else None
+    lay = ((ex["options"] if ex and isinstance(ex["options"], dict) else {}).get("layout") or {})
+    res = await ai.upgrade_question(q, _png(region), fig_png, lay.get("zhuyin") if "zhuyin" in lay else None)
     # the AI sometimes writes "\n" as text — but never touch a LaTeX command (\neq, \ne, \not…)
     unesc = lambda x: re.sub(r"\\n(?![A-Za-z])", "\n", x) if isinstance(x, str) else x
     for k in ("stem", "explanation", "figure_facts", "answer"):

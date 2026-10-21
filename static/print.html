@@ -141,6 +141,18 @@
     body.preview .sheet { background: #fff; width: var(--pw); margin: 0 auto; padding: 12mm; box-shadow: 0 2px 10px rgba(0,0,0,.15); min-height: var(--ph); }
     body.preview .keyhead { border-top: 2px dashed #94a3b8; padding-top: 10mm; margin-top: 10mm; }
     body.preview .imgpage { height: auto; margin-bottom: 12px; border-bottom: 2px dashed #94a3b8; padding-bottom: 12px; }
+    /* on a phone the A4 sheet is not shrunk to fit (unreadable): the text flows at the phone's width */
+    body.preview.narrow { padding: 0; --fs: 12.5pt; background: #fff; }
+    body.preview.narrow .sheet { width: auto; min-height: 0; padding: 10px 12px 16px; box-shadow: none; }
+    body.preview.narrow .cols2 { column-count: 1; }
+    body.preview.narrow .opts.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    body.preview.narrow .qrow { flex-wrap: wrap; }
+    body.preview.narrow .qvis { max-width: 100%; }
+    body.preview.narrow img, body.preview.narrow svg { max-width: 100%; height: auto; }
+    /* a figure sized as on the A4 original would be a thumbnail on a phone: at least half the width */
+    body.preview.narrow .qfig:not(.side) .fig, body.preview.narrow .qfig:not(.side) .qsvg { width: auto !important; min-width: 55%; max-width: 100%; max-height: none; }
+    body.preview.narrow .qfig:not(.side) .qsvg svg { width: 100%; height: auto; }
+    body.preview.narrow .title { font-size: 1.15em; }
     #msg { text-align: center; color: #64748b; padding: 40px; font-family: sans-serif; }
   }
 </style>
