@@ -1326,37 +1326,47 @@ input.switch:checked::after { left: 23px; }
 .qlead summary { cursor: pointer; font-size: 13px; color: var(--ink-2, var(--muted)); font-weight: 700; }
 .qlead-stem { white-space: pre-line; margin: 6px 0; }
 
-/* 題庫 → 已拍的考卷 as a 書櫃: one shelf per day (newest on top), the books standing by subject.
-   A series' 回 stand together as a set, with what is still missing written under it. */
+/* 題庫 → 已拍的考卷 as a 書櫃: one shelf (row) per day, newest on top. Each subject is one pile of
+   books in its colour; tapping the pile opens it under the row, showing every book with its name. */
 .ex-case { padding: 0; }
 .bookcase { display: grid; gap: 6px; }
 .shelf { padding: 10px 0 0; }
 .shelf-date { display: flex; align-items: baseline; gap: 10px; padding: 0 2px 10px; }
 .shelf-date b { font-size: 15px; font-family: var(--num); }
-.shelf-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 24px; padding: 0 10px; }
+.shelf-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 22px; padding: 0 10px; }
 .shelf-subj { display: grid; gap: 8px; align-content: start; justify-items: start; max-width: 100%; }
 .shelf-subj-t { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
 .shelf-subj-t i { width: 10px; height: 10px; border-radius: 3px; background: var(--sc); }
 .shelf-subj-t span { font-size: 12px; font-weight: 500; color: var(--muted); font-family: var(--num); }
-.shelf-books { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 14px; max-width: 100%; }
-.books { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 10px; }
+.books { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 12px; }
 .book { width: 104px; display: grid; gap: 6px; align-content: start; cursor: pointer; border-radius: 10px; padding: 4px; margin: -4px; }
 .book:hover .book-cover, .book:focus-visible .book-cover { transform: translateY(-3px); box-shadow: 0 6px 14px rgba(0,0,0,.14); }
-.book:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
+.book:focus-visible, .pile:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
 .book-cover { position: relative; aspect-ratio: 3/4; border-radius: 3px 6px 6px 3px; background: var(--sunk) center top/cover no-repeat; border: 1px solid var(--line);
   border-left: 5px solid var(--sc); box-shadow: 0 2px 5px rgba(0,0,0,.1), inset 1px 0 0 rgba(255,255,255,.5); transition: transform .15s, box-shadow .15s; }
-.book-tag { position: absolute; left: 4px; right: 4px; bottom: 4px; justify-content: center; font-size: 11px; padding: 1px 6px; white-space: normal; }
+.book-tag { position: absolute; left: 4px; right: 4px; bottom: 4px; justify-content: center; font-size: 11px; padding: 1px 4px; white-space: nowrap; }
 .book-t { font-size: 12.5px; line-height: 1.35; overflow-wrap: anywhere; color: var(--ink); }
 .book-m { font-size: 11.5px; color: var(--muted); }
-.book-set { display: grid; gap: 6px; padding: 8px 10px 6px; border: 1px dashed var(--line-2); border-radius: 12px; background: var(--card); width: max-content; max-width: min(100%, 440px); }
-.book-set-t { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; }
-.book-set-t b { font-size: 12.5px; flex-basis: 100%; }
-.book-set-t .tag { white-space: normal; height: auto; }
-.shelf-board { height: 10px; margin-top: 10px; border-radius: 3px; background: linear-gradient(var(--line-2), var(--line)); box-shadow: 0 3px 4px rgba(0,0,0,.08); }
-[data-theme="night"] .shelf-board { background: linear-gradient(var(--line-2), var(--line)); box-shadow: 0 3px 6px rgba(0,0,0,.4); }
-[data-theme="night"] .book-cover { box-shadow: 0 2px 5px rgba(0,0,0,.4); }
+/* a pile: the newest cover on top, the others peeking out behind it; the number says how many */
+.pile { position: relative; width: 104px; padding: 0 10px 10px 0; margin: 0; border: 0; background: none; cursor: pointer; font: inherit; text-align: left; border-radius: 10px; }
+.pile-layers { display: block; position: relative; }
+.pile-layers::before, .pile-layers::after { content: ''; position: absolute; inset: 0; border-radius: 3px 6px 6px 3px; background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--sc); box-shadow: 0 2px 5px rgba(0,0,0,.08); }
+.pile-layers::before { transform: translate(5px, 5px); opacity: .85; }
+.pile-layers::after { transform: translate(10px, 10px); opacity: .6; }
+.pile-layers .book-cover { position: relative; z-index: 1; }
+.pile-n { position: absolute; right: -2px; top: -8px; z-index: 2; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--sc); color: #fff; font-family: var(--num); font-weight: 800; font-size: 13px; display: grid; place-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.pile:hover .book-cover, .pile.on .book-cover { transform: translateY(-3px); box-shadow: 0 6px 14px rgba(0,0,0,.14); }
+.pile.on .pile-layers::before, .pile.on .pile-layers::after { transform: translate(0, 0); opacity: 0; }
+/* the opened pile: a tray under the row, in the subject's colour */
+.pile-open { margin: 12px 10px 0; padding: 10px 12px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--sc); }
+.pile-open-t { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.pile-open-t .btn.link { min-height: 0; padding: 0; }
+.shelf-board { height: 10px; margin-top: 12px; border-radius: 3px; background: linear-gradient(var(--line-2), var(--line)); box-shadow: 0 3px 4px rgba(0,0,0,.08); }
+[data-theme="night"] .shelf-board { box-shadow: 0 3px 6px rgba(0,0,0,.4); }
+[data-theme="night"] .book-cover, [data-theme="night"] .pile-layers::before, [data-theme="night"] .pile-layers::after { box-shadow: 0 2px 5px rgba(0,0,0,.4); }
 @media (max-width: 700px) {
-  .shelf-row { gap: 10px 16px; padding: 0 4px; }
-  .book { width: 84px; }
+  .shelf-row { gap: 10px 14px; padding: 0 4px; }
+  .book, .pile { width: 84px; }
   .book-t { font-size: 12px; }
+  .pile-open { margin: 10px 4px 0; padding: 8px 10px 10px; }
 }

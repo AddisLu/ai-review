@@ -13,7 +13,7 @@ const kidId = () => { const u = state.status.user; return u.role === 'parent' &&
 
 export async function render(main) {
   html(main, `<div class="ex-page">
-  <div class="page-head bk-top"><div class="grow"><h1>題庫</h1><div class="sub">像書櫃一樣：一天一層，最新的在最上面；同一天再依科目排好</div></div>
+  <div class="page-head bk-top"><div class="grow"><h1>題庫</h1><div class="sub">像書櫃一樣：一天一層，最新的在最上面；同一科疊成一疊，點一下展開</div></div>
     <a class="btn ghost sm" href="#/bank?view=analysis">${icon('chart', 16)}<span class="bk-lbl"> 弱點分析</span></a>
     <a class="btn ghost sm" href="#/scan">${icon('scan', 16)}<span class="bk-lbl"> 拍考卷</span></a></div>
   ${bankTabs('exams')}
@@ -49,6 +49,8 @@ function dayLabel(d) {
 }
 
 let examQ = '';
+// the piles opened on the 書櫃 (day|subject), kept while the tab is open
+let openPiles = (() => { try { return new Set(JSON.parse(sessionStorage.getItem('examPiles') || '[]')); } catch { return new Set(); } })();
 // 已拍的考卷 filters: tap chips (several in one row = any of them); every count is what tapping gives
 const EF0 = () => ({ kid: [], subject: [], school: [], kind: [], mode: [], bank: [], time: '', fix: false });
 let EF = (() => { try { return { ...EF0(), ...JSON.parse(sessionStorage.getItem('examF') || '{}') }; } catch { return EF0(); } })();
@@ -126,19 +128,27 @@ export async function loadExams() {
     series.get(k).ns.push(sr.n);
     e._series = k; e._n = sr.n;
   }
-  // a book standing on the shelf: its cover (first page), whole name, whose it is; score, pages, wrong
-  // ones… are inside. Only what needs attention shows here (處理中、失敗、拍重複)
-  const book = (e) => `
-    <div class="book" data-id="${e.id}" role="link" tabindex="0" aria-label="${esc(e.title)}">
-      <div class="book-cover" style="background-image:url('${thumbUrl(e.thumb, e.thumb_v)}')">
+  // a book standing on the shelf: its cover (first page) and its name; score, pages, wrong ones… are
+  // inside. Only what needs attention shows on the cover (處理中、失敗、拍重複、a series' missing 回)
+  const cover = (e, tag = '') => `<div class="book-cover" style="background-image:url('${thumbUrl(e.thumb, e.thumb_v)}')">
         ${e.status === 'processing' ? '<span class="tag warn book-tag"><span class="spinner" style="width:10px;height:10px;border-width:2px"></span> 處理中</span>'
           : e.status === 'error' ? '<span class="tag bad book-tag">失敗</span>'
-          : seen[dupKey(e)] > 1 ? '<span class="tag warn book-tag">重複拍了</span>' : ''}</div>
+          : seen[dupKey(e)] > 1 ? '<span class="tag warn book-tag">重複拍了</span>' : tag}</div>`;
+  const missingOf = (e) => {
+    if (!e._series) return 0;
+    const ns = [...new Set(series.get(e._series).ns.filter(Number.isFinite))];
+    const max = ns.length ? Math.max(...ns) : 0;
+    let m = 0; for (let i = 1; i < max; i++) if (!ns.includes(i)) m++;
+    return m;
+  };
+  const book = (e) => `
+    <div class="book" data-id="${e.id}" role="link" tabindex="0" aria-label="${esc(e.title)}">
+      ${cover(e, missingOf(e) ? `<span class="tag warn book-tag">還缺 ${missingOf(e)} 回</span>` : '')}
       <div class="book-t">${esc(e.title)}</div>
       ${owners.size > 1 ? `<div class="book-m">${e.owner_avatar || ''}${esc(e.owner_name || '')}</div>` : ''}
     </div>`;
-  // the 書櫃: one shelf per day (newest on top); on a shelf the books stand by subject, and the 回 of
-  // one series stand together as a set that says which 回 are there and which are still missing
+  // the 書櫃: one shelf (row) per day, newest on top. On a shelf each subject is one pile of books —
+  // tap it to open the pile under the row and see every book's name; a subject with one book is just that book
   const dayOf = (e) => (e.exam_date || e.created_at || '').slice(0, 10) || '未知日期';
   const shelves = new Map();
   for (const e of exams) {
@@ -150,35 +160,36 @@ export async function loadExams() {
   }
   const order = Object.keys(SUBJECT_META());  // 數學、國語… in the family's usual order, then the rest
   const rank = (sj) => (order.includes(sj) ? order.indexOf(sj) : order.length + (sj === '未分類' ? 1 : 0));
+  // in a pile: a series' 回 stand together in 回 order, the rest newest first
+  const sorted = (list) => [...list].sort((a, b) => (a._series || '').localeCompare(b._series || '') || (a._series ? a._n - b._n : b.id - a.id));
+  const subjLabel = (sj, n) => `<div class="shelf-subj-t"><i></i>${esc(sj)}${n > 1 ? `<span>${n}</span>` : ''}</div>`;
   const shelfHtml = (d, subs) => {
     const n = [...subs.values()].reduce((a, b) => a + b.length, 0);
-    const cols = [...subs.entries()].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b)).map(([sj, list]) => {
-      // in a subject: a series' 回 are one set (in 回 order); the rest stand newest first
-      const sets = new Map(), loose = [];
-      for (const e of list.sort((a, b) => b.id - a.id)) {
-        if (!e._series) { loose.push(e); continue; }
-        if (!sets.has(e._series)) sets.set(e._series, []);
-        sets.get(e._series).push(e);
-      }
-      const setHtml = (k, items) => {
-        const sr = series.get(k), ns = [...new Set(sr.ns.filter(Number.isFinite))].sort((a, b) => a - b), max = ns.length ? ns[ns.length - 1] : 0;
-        const missing = []; for (let i = 1; i < max; i++) if (!ns.includes(i)) missing.push(i);
-        items.sort((a, b) => a._n - b._n);
-        return `<div class="book-set"><div class="books">${items.map(book).join('')}</div>
-          <div class="book-set-t"><b>${esc(sr.base)}</b><span class="small muted">已拍：${ns.map((x) => `第${x}回`).join('、')}</span>
-            ${missing.length ? `<span class="tag warn">還沒拍：${missing.map((x) => `第${x}回`).join('、')}</span>` : ''}
-            ${sr.ns.length > ns.length ? '<span class="tag bad">有重複拍的回數</span>' : ''}</div></div>`;
-      };
-      return `<div class="shelf-subj" style="--sc:${subjectColor(sj)}"><div class="shelf-subj-t"><i></i>${esc(sj)}<span>${list.length}</span></div>
-        <div class="shelf-books">${[...sets.entries()].map(([k, items]) => setHtml(k, items)).join('')}${loose.length ? `<div class="books">${loose.map(book).join('')}</div>` : ''}</div></div>`;
+    const cols = [...subs.entries()].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
+    const row = cols.map(([sj, list]) => {
+      const k = `${d}|${sj}`, on = openPiles.has(k);
+      if (list.length === 1) return `<div class="shelf-subj" style="--sc:${subjectColor(sj)}">${subjLabel(sj, 1)}${book(list[0])}</div>`;
+      const top = sorted(list)[0];
+      return `<div class="shelf-subj" style="--sc:${subjectColor(sj)}">${subjLabel(sj, list.length)}
+        <button class="pile ${on ? 'on' : ''}" data-pile="${esc(k)}" aria-expanded="${on}" aria-label="${esc(sj)} ${list.length} 份，${on ? '收起' : '展開'}">
+          <span class="pile-layers" style="--n:${Math.min(list.length, 4)}">${cover(top)}</span><span class="pile-n">${list.length}</span></button></div>`;
     }).join('');
+    const open = cols.filter(([sj, list]) => list.length > 1 && openPiles.has(`${d}|${sj}`)).map(([sj, list]) =>
+      `<div class="pile-open" style="--sc:${subjectColor(sj)}"><div class="pile-open-t">${subjLabel(sj, list.length)}<button class="btn link sm" data-pile="${esc(`${d}|${sj}`)}">收起</button></div>
+        <div class="books">${sorted(list).map(book).join('')}</div></div>`).join('');
     return `<section class="shelf"><div class="shelf-date"><b>${dayLabel(d)}</b><span class="small muted">${n} 份</span></div>
-      <div class="shelf-row">${cols}</div><div class="shelf-board" aria-hidden="true"></div></section>`;
+      <div class="shelf-row">${row}</div>${open}<div class="shelf-board" aria-hidden="true"></div></section>`;
   };
   el.innerHTML = `<div class="bookcase">${[...shelves.entries()].sort(([a], [b]) => (a < b ? 1 : -1)).map(([d, subs]) => shelfHtml(d, subs)).join('')}</div>`;
   el.querySelectorAll('.book').forEach((c) => {
     c.onclick = () => { location.hash = `#/exam/${c.dataset.id}`; };
     c.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); c.click(); } };
+  });
+  el.querySelectorAll('[data-pile]').forEach((b) => b.onclick = () => {
+    const k = b.dataset.pile;
+    openPiles.has(k) ? openPiles.delete(k) : openPiles.add(k);
+    try { sessionStorage.setItem('examPiles', JSON.stringify([...openPiles])); } catch { /* private mode */ }
+    loadExams();
   });
   if (exams.some((e) => e.status === 'processing')) {  // only while one is being read (the list shows nothing else that changes)
     clearTimeout(loadExams._t);
