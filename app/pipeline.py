@@ -1800,7 +1800,7 @@ async def _redraw_ok(svg: str, original: bytes, stem: str) -> tuple[bool, list]:
     return bool(v.get("same")), v.get("problems") or []
 
 
-async def upgrade_question(qid: int) -> dict:
+async def upgrade_question(qid: int, hint: list | None = None) -> dict:
     q = db.one("SELECT * FROM questions WHERE id=?", (qid,))
     if not q:
         return {}
@@ -1811,7 +1811,7 @@ async def upgrade_question(qid: int) -> dict:
     fig_png = _png(fig) if fig is not None else None
     ex = db.one("SELECT options FROM exams WHERE id=?", (q["exam_id"],)) if q.get("exam_id") else None
     lay = ((ex["options"] if ex and isinstance(ex["options"], dict) else {}).get("layout") or {})
-    res = await ai.upgrade_question(q, _png(region), fig_png, lay.get("zhuyin") if "zhuyin" in lay else None)
+    res = await ai.upgrade_question(q, _png(region), fig_png, lay.get("zhuyin") if "zhuyin" in lay else None, hint)
     # the AI sometimes writes "\n" as text — but never touch a LaTeX command (\neq, \ne, \not…)
     unesc = lambda x: re.sub(r"\\n(?![A-Za-z])", "\n", x) if isinstance(x, str) else x
     for k in ("stem", "explanation", "figure_facts", "answer"):
@@ -2079,6 +2079,163 @@ async def zhuyin_after_upgrade(exam_id: int):
             await zhuyin_job(None, exam_id)
         except Exception as err:  # noqa: BLE001 — a background nicety must never stop the rest
             log.warning("zhuyin after upgrade %s: %s", exam_id, err)
+
+
+# --- 與原卷一致 ------------------------------------------------------------------------------------
+# Every page of a scanned exam is made again as the paper the family prints (print.html → PDF → PNG)
+# and laid beside the photo of that page; the AI says, question by question, whether the printed
+# content is the same (text, numbers, options, 注音, figure / table). A question that is not is
+# upgraded again with what was found, and its page looked at once more; what still differs is kept on
+# the exam (options.fidelity) for the parent.
+FIDELITY_PARALLEL = 2
+
+
+async def _page_regenerated(exam: dict, page: dict, ids: list[int]) -> list[bytes]:
+    from . import exporters, templates
+    opts = exam["options"] if isinstance(exam["options"], dict) else {}
+    tok = exporters.make_spec(f"{exam['title']}（第 {page['idx'] + 1} 頁）", ids,
+                              {"template": opts.get("template") or "auto", "keep_original": True, "header": False,
+                               "answers": "none", "explanations": False}, exam["id"])
+    pdf = await exporters.pdf(tok)
+    pngs = await templates.pdf_pages(pdf, 110)
+    out = [await asyncio.to_thread(imaging.file_for_ai, p, 1600) for p in pngs[:3]]
+    for p in pngs:
+        p.unlink(missing_ok=True)
+    pdf.unlink(missing_ok=True)
+    return out
+
+
+async def _check_page(exam: dict, page: dict, qs: list[dict]) -> dict:
+    """{question id: problems} for the questions of a page that differ from the photo."""
+    regen = await _page_regenerated(exam, page, [q["id"] for q in qs])
+    if not regen:
+        return {}
+    original = await asyncio.to_thread(imaging.file_for_ai, media(page["scan_path"]), 2000)
+    items = [{"index": i, "number": q.get("number") or i + 1,
+              "text": re.sub(r"\{([^{}|]+)\|[^{}]+\}", r"\1", q.get("stem") or "")[:40].replace("\n", " ")} for i, q in enumerate(qs)]
+    res = await ai.check_page_fidelity(original, regen, items)
+    bad = {}
+    for r in res:
+        try:
+            i = int(r.get("index"))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= i < len(qs) and r.get("ok") is False:
+            bad[qs[i]["id"]] = {"problems": [str(x) for x in (r.get("problems") or [])][:6] or ["和原稿不一致"],
+                                "figure": bool(r.get("figure_bad"))}
+    return bad
+
+
+async def fidelity_exam(job_id: int | None, exam_id: int, redo: bool = True, report=None) -> dict:
+    exam = db.one("SELECT * FROM exams WHERE id=?", (exam_id,))
+    if not exam:
+        return {}
+    pages = db.q("SELECT * FROM pages WHERE exam_id=? AND scan_path!='' ORDER BY idx", (exam_id,))
+    byp = {}
+    for q in db.q("SELECT * FROM questions WHERE exam_id=? AND source='scan' ORDER BY seq, id", (exam_id,)):
+        q["options"] = _as_list(q.get("options"))
+        byp.setdefault(q["page_id"], []).append(q)
+    pages = [p for p in pages if byp.get(p["id"]) and media(p["scan_path"]).exists()]
+    sem = asyncio.Semaphore(FIDELITY_PARALLEL)
+    found, seen, errors = {}, 0, []
+
+    async def look(p, only=None):
+        nonlocal seen
+        async with sem:
+            try:
+                bad = await _check_page(exam, p, byp[p["id"]])  # the whole page; afterwards only the redone ones count
+            except (ai.AIError, RuntimeError) as err:
+                errors.append(f"第 {p['idx'] + 1} 頁：{err}")
+                return {}
+            seen += 1
+            if report:
+                report(seen)
+            return {k: v for k, v in bad.items() if only is None or k in only}
+
+    for d in await asyncio.gather(*(look(p) for p in pages)):
+        found.update(d)
+    first = dict(found)
+    fixed, pictured, still = [], [], dict(found)
+    rsem = asyncio.Semaphore(3)
+
+    async def again(qid, pr):
+        async with rsem:
+            try:
+                await upgrade_question(qid, pr["problems"])
+            except ai.AIError as err:
+                log.warning("fidelity redo q%s: %s", qid, err)
+
+    def refresh(ids):
+        for q in db.q(f"SELECT * FROM questions WHERE id IN ({','.join('?' * len(ids))})", tuple(ids)):
+            q["options"] = _as_list(q.get("options"))
+            byp[q["page_id"]] = [q if x["id"] == q["id"] else x for x in byp[q["page_id"]]]
+
+    for rnd in range(2 if redo else 0):
+        if not still:
+            break
+        todo = dict(still)
+        if rnd == 1:
+            # the second time a figure is still not the same, the original picture is used instead (its
+            # answer boxes emptied): the paper then shows exactly what was printed
+            for qid, pr in list(todo.items()):
+                q = db.one("SELECT * FROM questions WHERE id=?", (qid,))
+                if pr["figure"] and q and q.get("figure_path") and media(q["figure_path"]).exists():
+                    rel = await asyncio.to_thread(keep_picture, q)
+                    if rel:
+                        db.update("questions", qid, {"figure_path": rel, "figure_svg": "", "figure_table": None,
+                                                     "figure_kind": "image", "updated_at": db.now()})
+                        pictured.append(qid)
+                        todo.pop(qid)  # not upgraded again (that would draw an SVG over the picture); looked at once more below
+        await asyncio.gather(*(again(qid, pr) for qid, pr in todo.items()))
+        refresh(list(still))
+        redo_pages = [p for p in pages if any(q["id"] in still for q in byp[p["id"]])]
+        after = {}
+        for d in await asyncio.gather(*(look(p, set(still)) for p in redo_pages)):
+            after.update(d)
+        fixed += [qid for qid in still if qid not in after]
+        still = after
+    num = {q["id"]: q.get("number") or "" for qs in byp.values() for q in qs}
+    summary = {"checked_at": db.now(), "pages": len(pages), "questions": sum(len(byp[p["id"]]) for p in pages),
+               "found": len(first), "fixed": len(fixed), "pictured": len(pictured), "errors": errors[:5],
+               "still": [{"id": qid, "number": num.get(qid, ""), "problems": pr["problems"]} for qid, pr in still.items()]}
+    e = db.one("SELECT options FROM exams WHERE id=?", (exam_id,))
+    opts = e["options"] if isinstance(e["options"], dict) else {}
+    db.update("exams", exam_id, {"options": {**opts, "fidelity": summary}})
+    for qid, pr in still.items():  # shown on the question as 「AI 看圖不太確定」 for the parent to check
+        db.update("questions", qid, {"figure_unsure": "和原卷比對仍不一致：" + "；".join(pr["problems"][:2])})
+    if fixed:
+        from . import nas
+        nas.mark_dirty()
+    return summary
+
+
+async def fidelity_exam_job(job_id: int, exam_id: int):
+    n = db.scalar("SELECT COUNT(DISTINCT page_id) FROM questions WHERE exam_id=? AND source='scan'", (exam_id,)) or 1
+    return await fidelity_exam(job_id, exam_id, True,
+                               lambda seen: jobs.progress(job_id, min(95, int(90 * seen / n)), f"和原卷比對 {seen}/{n} 頁"))
+
+
+async def fidelity_all_job(job_id: int):
+    """Every exam (newest first), one after the other."""
+    ids = [r["id"] for r in db.q("SELECT id FROM exams WHERE status='ready' ORDER BY id DESC")]
+    total = {"exams": 0, "pages": 0, "questions": 0, "found": 0, "fixed": 0, "pictured": 0, "still": 0, "errors": 0}
+    for k, eid in enumerate(ids):
+        title = db.scalar("SELECT title FROM exams WHERE id=?", (eid,)) or ""
+        jobs.progress(job_id, int(100 * k / max(1, len(ids))), f"第 {k + 1}/{len(ids)} 份：{title[:20]}")
+        try:
+            s = await fidelity_exam(None, eid, True,
+                                    lambda seen, k=k, title=title: jobs.progress(job_id, int(100 * k / max(1, len(ids))),
+                                                                                f"第 {k + 1}/{len(ids)} 份：{title[:20]}（{seen} 頁）"))
+        except Exception as err:  # noqa: BLE001 — one exam must not stop the rest
+            log.warning("fidelity exam %s: %s", eid, err)
+            total["errors"] += 1
+            continue
+        total["exams"] += 1
+        for key in ("pages", "questions", "found", "fixed", "pictured"):
+            total[key] += s.get(key, 0)
+        total["still"] += len(s.get("still", []))
+        total["errors"] += len(s.get("errors", []))
+    return total
 
 
 def _upgrading_pool() -> bool:

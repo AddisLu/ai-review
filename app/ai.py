@@ -786,13 +786,17 @@ async def classify_exam(title: str, header: str, kinds: list[dict]) -> str:
     return k if any(x["id"] == k for x in kinds) else ""
 
 
-async def upgrade_question(qd: dict, crop: bytes, figure: bytes | None, zhuyin: bool | None = None) -> dict:
+async def upgrade_question(qd: dict, crop: bytes, figure: bytes | None, zhuyin: bool | None = None,
+                           hint: list | None = None) -> dict:
     """題目升級: proofread against the original, rebuild the figure (table / SVG), full 詳解."""
     content = [{"type": "text", "text": "題目原稿："}, img_block(crop, "image/png")]
     if figure:
         content += [{"type": "text", "text": "其中的圖："}, img_block(figure, "image/png")]
     note = (f"\n\n【家長的說明，一定正確、以這個為準】{qd['fix_note']}\n（請照這個說明修正題目、圖形（SVG 要照說明重畫）、答案和詳解；"
             "原稿看不清楚的地方以家長的說明為準。）") if qd.get("fix_note") else ""
+    if hint:  # 與原卷一致: what a comparison of the last version with the original found
+        note += ("\n\n【上一版和原稿比對時發現的不一致，請逐一對照原稿確認，以原稿為準修正（題目、選項、注音、圖都要重新檢查）】\n"
+                 + "\n".join(f"- {h}" for h in hint[:8]))
     # what the whole paper looks like (ai.detect_layout): a 注音 paper gets 注音 on every character, a plain one none
     zy = "這份考卷的國字旁都印有注音：每個國字都要標。" if zhuyin else "這份考卷沒有印注音：不要加注音。" if zhuyin is False else ""
     content.append({"type": "text", "text": prompts.UPGRADE_TASK.format(question=question_text(qd, with_answer=True), zhuyin=zy) + note})
@@ -806,6 +810,17 @@ async def add_zhuyin(items: list[dict]) -> list[dict]:
     res = await call_json("zhuyin", [{"type": "text", "text": prompts.ZHUYIN_TASK.format(items=text)}], prompts.ZHUYIN_SCHEMA,
                           effort="medium", max_tokens=16000)
     return res.get("items") or []
+
+
+async def check_page_fidelity(original: bytes, regenerated: list[bytes], items: list[dict]) -> list[dict]:
+    """與原卷一致: the photo of a page and the paper made again from it; per question ok / problems."""
+    listing = "\n".join(f"[{it['index']}] 第 {it['number']} 題｜{it['text']}" for it in items)
+    content = [{"type": "text", "text": "原稿："}, img_block(original)]
+    for i, png in enumerate(regenerated, 1):
+        content += [{"type": "text", "text": f"電子試卷第 {i} 張："}, img_block(png)]
+    content.append({"type": "text", "text": prompts.FIDELITY_TASK.format(n=len(regenerated), items=listing)})
+    res = await call_json("fidelity", content, prompts.FIDELITY_SCHEMA, effort="medium", max_tokens=12000)
+    return res.get("questions") or []
 
 
 async def verify_answers(items: list[dict], images: list[bytes]) -> list[dict]:

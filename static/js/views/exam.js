@@ -765,6 +765,7 @@ function resultCard(c, compact = false) {
       return up < n ? `<div class="small up-line" style="margin-top:10px"><span class="progress" style="flex:1"><i style="width:${Math.round(100 * up / n)}%"></i></span>
         <span>AI 正在對照原稿校對、重畫圖：${up}/${n} 題</span>${state.status.user.role === 'parent' ? '<button class="btn sm soft" id="exprio">優先處理這份</button>' : ''}</div>` : ''; })()}
     ${verifyLine()}
+    ${fidelityLine()}
     <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">
       ${compact ? '' : `<button class="btn sm ok" id="expractice">${icon('play', 15)} 直接練習這一份</button>
       <button class="btn sm soft" id="exgrade">✅ 批改</button>`}
@@ -777,9 +778,20 @@ function resultCard(c, compact = false) {
         <button id="exregen">${icon('redo', 15)} 依範本重新產生 Word、解答、NAS</button>
         <button id="exup">${icon('bolt', 15)} AI 重新校對、重畫圖</button>
         <button id="exverify">${icon('search', 15)} AI 複查答案、詳解</button>
+        <button id="exfid">${icon('image', 15)} AI 比對原卷（不一致的重做）</button>
         ${((exam.options || {}).layout || {}).zhuyin ? '<button id="exzy">ㄅㄆㄇ 補注音（缺注音的題目）</button>' : ''}
         <a href="#/templates">${icon('doc', 15)} 範本設定</a></div></details>` : ''}
     </div></div>`;
+}
+
+// 與原卷一致: the regenerated paper compared with the photos — what was redone, what still differs
+function fidelityLine() {
+  const f = (exam.options || {}).fidelity;
+  if (!f) return '';
+  const still = f.still || [];
+  return `<div class="small" style="margin-top:10px">${still.length ? '⚠️' : '✅'} 和原卷比對（${esc((f.checked_at || '').slice(5, 16).replace('T', ' '))}）：
+    ${f.questions} 題看過${f.found ? `，${f.found} 題不一致、已重做 ${f.fixed} 題` : '，全部一致'}${still.length
+      ? `；<b style="color:var(--bad)">仍不一致 ${still.length} 題</b>：${still.slice(0, 8).map((x) => `第 ${esc(x.number)} 題（${esc((x.problems || [])[0] || '')}）`).join('、')}${still.length > 8 ? '…' : ''}` : ''}</div>`;
 }
 
 // 答案複查: what the second look at the answers found (and changed), for the parent to see
@@ -818,6 +830,16 @@ async function bindResult(main) {
   if (up) up.onclick = async () => {
     if (!await confirmBox('AI 會對照原稿重新校對每一題、把圖重畫成 SVG（或做成表格），並重寫詳解。在背景進行，約每題半分鐘到一分鐘。', '開始')) return;
     try { await post('/api/exams/upgrade', { exam_id: exam.id, force: true }); toast('已開始，在背景進行；完成後題目和 Word／PDF 會自動更新', 'ok'); } catch (e) { errToast(e); }
+  };
+  const fd = $('#exfid');
+  if (fd) fd.onclick = async () => {
+    try {
+      const r = await post(`/api/exams/${exam.id}/fidelity`);
+      toast('和原卷比對中，在背景進行（每頁約半分鐘）…', 'ok');
+      const res = await waitJob(r.job_id);
+      toast(res.found ? `比對完成：${res.found} 題不一致，重做後 ${res.fixed} 題已一致${(res.still || []).length ? `，${res.still.length} 題仍需你確認` : ''}` : '比對完成：每一題都和原卷一致', 'ok');
+      if (location.hash.startsWith(`#/exam/${exam.id}`)) load(main, exam.id);
+    } catch (e) { errToast(e); }
   };
   const zy = $('#exzy');
   if (zy) zy.onclick = async () => {

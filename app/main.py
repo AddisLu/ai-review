@@ -1167,6 +1167,21 @@ async def exams_upgrade(body: dict, request: Request):
     return {"job_id": ahead(("upgrade_all",), "upgrade_all", 0, pipeline.upgrade_all_job, bool(body.get("force")))}
 
 
+@app.post("/api/exams/fidelity")
+async def exams_fidelity_all(request: Request):
+    """與原卷一致: every exam's regenerated paper compared with its photos; what differs is made again."""
+    need_parent(request)
+    need_ai()
+    return {"job_id": ahead(("fidelity_all",), "fidelity_all", 0, pipeline.fidelity_all_job)}
+
+
+@app.post("/api/exams/{exam_id}/fidelity")
+async def exam_fidelity(exam_id: int, request: Request):
+    own_exam(request, exam_id)
+    need_ai()
+    return {"job_id": ahead(("fidelity", exam_id), "fidelity", exam_id, pipeline.fidelity_exam_job, exam_id)}
+
+
 @app.post("/api/exams/{exam_id}/zhuyin")
 async def exam_zhuyin(exam_id: int, request: Request):
     """補注音: a paper printed with 注音 on every character gets the marks on every question whose

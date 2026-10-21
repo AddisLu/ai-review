@@ -697,6 +697,27 @@ ZHUYIN_TASK = """這份考卷的原稿每個國字旁邊都印有注音（低年
 
 {items}"""
 
+# 與原卷一致: the paper made again from a page, laid beside the photo of that page
+FIDELITY_SCHEMA = _obj({"questions": {"type": "array", "items": _obj({
+    "index": {"type": "integer"}, "ok": {"type": "boolean"}, "figure_bad": {"type": "boolean"},
+    "problems": {"type": "array", "items": {"type": "string"}}})}})
+
+FIDELITY_TASK = """第一張是考卷原稿（學生寫過、老師批改過的照片）。後面{n}張是電腦依照它「重新產生的電子試卷」。
+請逐題嚴格比對，確認電子試卷和原稿的**印刷內容**完全一致：
+- 題目文字：有沒有漏字、多字、錯字、字的順序不對、少了一句或一行。
+- 數字、單位、符號、分數、算式、題號後的空格（　　）或＿＿＿位置。
+- 選項：數量、內容、順序（圖形選項的每張小圖也要對）。
+- 注音：原稿國字旁有注音，電子試卷也要有（每個字都要有）；原稿沒有就不該有。
+- 圖和表：原稿有圖，電子試卷要有；圖上的每個數字、文字標籤、符號、記號、①②③④、線條連接、交點、圖形數量、相對位置和比例關係要一致；表格每一格要一致。
+不用管：字型、字的大小、換行位置、排版、題目之間的間距、線條粗細、美觀；作答區的格式（「答：」、作答橫線、留白的大小、方格數）；原稿上學生的手寫答案、塗改、計算過程，老師的紅筆批改、勾叉、分數——這些本來就不該出現在電子試卷上。
+電子試卷上多出原稿沒有的東西（例如把學生的答案或批改畫進圖裡）也算不一致。
+
+要比對的題目（index：題號｜電子試卷上的文字開頭）：
+{items}
+
+每一題輸出 index、ok（完全一致 true，有任何一處不同 false）、figure_bad（不同的地方在圖或表上 true，只有文字不同 false）、problems（ok=false 時具體寫出哪裡不同，例如「第 3 題 選項③ 原稿是 15 公分，電子試卷寫 16 公分」「第 6 題 圖上少了『3公分』的標示」）；ok=true 時 problems 給空陣列。
+原稿這一頁看不到某一題（被切到下一頁、看不清楚）時 ok 填 true，problems 寫「原稿這一頁看不到」。"""
+
 FIGURE_CHECK_SCHEMA = _obj({"same": {"type": "boolean"}, "problems": {"type": "array", "items": {"type": "string"}}})
 
 FIGURE_CHECK_TASK = """第一張是考卷原稿的圖，第二張是重新畫的 SVG 圖。請嚴格比對：數字、文字、標籤、①②③④ 編號、線條連接、
