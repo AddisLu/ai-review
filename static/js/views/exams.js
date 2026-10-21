@@ -13,7 +13,7 @@ const kidId = () => { const u = state.status.user; return u.role === 'parent' &&
 
 export async function render(main) {
   html(main, `<div class="ex-page">
-  <div class="page-head bk-top"><div class="grow"><h1>題庫</h1><div class="sub">像書櫃一樣：一天一層，最新的在最上面；同一科疊成一疊，點一下展開</div></div>
+  <div class="page-head bk-top"><div class="grow"><h1>題庫</h1><div class="sub">像書櫃一樣：今天在最左邊，往右是更早的日子；同一科疊成一疊，點一下展開</div></div>
     <a class="btn ghost sm" href="#/bank?view=analysis">${icon('chart', 16)}<span class="bk-lbl"> 弱點分析</span></a>
     <a class="btn ghost sm" href="#/scan">${icon('scan', 16)}<span class="bk-lbl"> 拍考卷</span></a></div>
   ${bankTabs('exams')}
@@ -163,7 +163,8 @@ export async function loadExams() {
   // in a pile: a series' 回 stand together in 回 order, the rest newest first
   const sorted = (list) => [...list].sort((a, b) => (a._series || '').localeCompare(b._series || '') || (a._series ? a._n - b._n : b.id - a.id));
   const subjLabel = (sj, n) => `<div class="shelf-subj-t"><i></i>${esc(sj)}${n > 1 ? `<span>${n}</span>` : ''}</div>`;
-  const shelfHtml = (d, subs) => {
+  // one day of the shelf: its date, how many, and a pile (or the one book) per subject
+  const dayHtml = (d, subs) => {
     const n = [...subs.values()].reduce((a, b) => a + b.length, 0);
     const cols = [...subs.entries()].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
     const row = cols.map(([sj, list]) => {
@@ -172,15 +173,41 @@ export async function loadExams() {
       const top = sorted(list)[0];
       return `<div class="shelf-subj" style="--sc:${subjectColor(sj)}">${subjLabel(sj, list.length)}
         <button class="pile ${on ? 'on' : ''}" data-pile="${esc(k)}" aria-expanded="${on}" aria-label="${esc(sj)} ${list.length} 份，${on ? '收起' : '展開'}">
-          <span class="pile-layers" style="--n:${Math.min(list.length, 4)}">${cover(top)}</span><span class="pile-n">${list.length}</span></button></div>`;
+          <span class="pile-layers">${cover(top)}</span><span class="pile-n">${list.length}</span></button></div>`;
     }).join('');
-    const open = cols.filter(([sj, list]) => list.length > 1 && openPiles.has(`${d}|${sj}`)).map(([sj, list]) =>
-      `<div class="pile-open" style="--sc:${subjectColor(sj)}"><div class="pile-open-t">${subjLabel(sj, list.length)}<button class="btn link sm" data-pile="${esc(`${d}|${sj}`)}">收起</button></div>
-        <div class="books">${sorted(list).map(book).join('')}</div></div>`).join('');
-    return `<section class="shelf"><div class="shelf-date"><b>${dayLabel(d)}</b><span class="small muted">${n} 份</span></div>
-      <div class="shelf-row">${row}</div>${open}<div class="shelf-board" aria-hidden="true"></div></section>`;
+    return `<section class="shelf-day" data-day="${d}"><div class="shelf-date"><b>${dayLabel(d)}</b><span class="small muted">${n} 份</span></div>
+      <div class="shelf-row">${row}</div></section>`;
   };
-  el.innerHTML = `<div class="bookcase">${[...shelves.entries()].sort(([a], [b]) => (a < b ? 1 : -1)).map(([d, subs]) => shelfHtml(d, subs)).join('')}</div>`;
+  // the piles that are open: a tray under the shelf, one per pile (day + subject), so sliding the shelf is never interrupted
+  const trays = [...openPiles].map((k) => {
+    const [d, sj] = k.split('|');
+    const list = shelves.has(d) && shelves.get(d).get(sj);
+    if (!list || list.length < 2) return '';
+    return `<div class="pile-open" style="--sc:${subjectColor(sj)}"><div class="pile-open-t"><div class="shelf-subj-t"><i></i>${dayLabel(d)}・${esc(sj)}<span>${list.length}</span></div><button class="btn link sm" data-pile="${esc(k)}">收起</button></div>
+      <div class="books">${sorted(list).map(book).join('')}</div></div>`;
+  }).join('');
+  const today = localDay();
+  const days = [...shelves.keys()].sort((a, b) => (a < b ? 1 : -1));
+  // today is always the first slot (empty when nothing was photographed yet), so 回到今天 has somewhere to go
+  const todaySlot = !shelves.has(today) && !examQ && !anyFilter() ? `<section class="shelf-day empty" data-day="${today}"><div class="shelf-date"><b>${dayLabel(today)}</b></div><div class="shelf-row"><a class="shelf-none" href="#/scan">今天還沒拍<br>去拍考卷</a></div></section>` : '';
+  const scroller = el.querySelector('.shelf-scroll'), keepX = scroller ? scroller.scrollLeft : 0;
+  el.innerHTML = `<div class="bookcase">
+    <div class="shelf-nav"><button class="btn sm shelf-today" id="shelf-today">${icon('calendar', 15)} 回到今天</button><span class="small muted shelf-hint">往右滑是更早的日子</span>
+      <span class="spacer"></span><button class="btn sm ghost shelf-arrow" data-step="-1" aria-label="往新的日期">${icon('back', 16)}</button><button class="btn sm ghost shelf-arrow" data-step="1" aria-label="往更早的日期">${icon('chev', 16)}</button></div>
+    <div class="shelf-scroll" tabindex="0" aria-label="書架，左右捲動看每一天"><div class="shelf-track">${todaySlot}${days.map((d) => dayHtml(d, shelves.get(d))).join('')}</div></div>
+    ${trays}</div>`;
+  const sc = el.querySelector('.shelf-scroll');
+  sc.scrollLeft = keepX;
+  const todayBtn = el.querySelector('#shelf-today');
+  const atStart = () => { todayBtn.classList.toggle('home', sc.scrollLeft < 8); };
+  sc.onscroll = atStart; atStart();
+  todayBtn.onclick = () => { sc.scrollTo({ left: 0, behavior: 'smooth' }); sc.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+  el.querySelectorAll('.shelf-arrow').forEach((b) => b.onclick = () => {
+    // one day at a time: to the next day column's edge in that direction
+    const xs = [...sc.querySelectorAll('.shelf-day')].map((x) => x.offsetLeft), step = Number(b.dataset.step), cur = sc.scrollLeft;
+    const to = step > 0 ? xs.find((x) => x > cur + 8) : [...xs].reverse().find((x) => x < cur - 8);
+    sc.scrollTo({ left: to === undefined ? (step > 0 ? sc.scrollWidth : 0) : to, behavior: 'smooth' });
+  });
   el.querySelectorAll('.book').forEach((c) => {
     c.onclick = () => { location.hash = `#/exam/${c.dataset.id}`; };
     c.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); c.click(); } };

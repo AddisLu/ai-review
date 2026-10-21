@@ -1326,14 +1326,26 @@ input.switch:checked::after { left: 23px; }
 .qlead summary { cursor: pointer; font-size: 13px; color: var(--ink-2, var(--muted)); font-weight: 700; }
 .qlead-stem { white-space: pre-line; margin: 6px 0; }
 
-/* 題庫 → 已拍的考卷 as a 書櫃: one shelf (row) per day, newest on top. Each subject is one pile of
-   books in its colour; tapping the pile opens it under the row, showing every book with its name. */
+/* 題庫 → 已拍的考卷 as a 書櫃: one long shelf, today at the left edge and earlier days to the right
+   (slide sideways; 回到今天 brings the shelf back). Each subject is one pile of books in its colour;
+   tapping the pile opens it under the shelf, showing every book with its name. */
 .ex-case { padding: 0; }
-.bookcase { display: grid; gap: 6px; }
-.shelf { padding: 10px 0 0; }
-.shelf-date { display: flex; align-items: baseline; gap: 10px; padding: 0 2px 10px; }
+.bookcase { display: grid; gap: 10px; }
+.shelf-nav { display: flex; align-items: center; gap: 10px; }
+.shelf-today { background: var(--ink); color: var(--card); border-color: var(--ink); gap: 6px; }
+.shelf-today.home { opacity: .45; }
+.shelf-arrow { min-width: 36px; padding: 0 8px; }
+.shelf-scroll { overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; scrollbar-width: thin; -webkit-overflow-scrolling: touch; outline: 0; border-radius: 12px; }
+.shelf-scroll:focus-visible { box-shadow: 0 0 0 2px var(--pri); }
+.shelf-track { display: flex; align-items: flex-start; width: max-content; min-width: 100%; padding: 6px 0 12px; border-bottom: 10px solid var(--line-2); box-shadow: 0 3px 4px rgba(0,0,0,.08); }
+.shelf-day { flex: 0 0 auto; scroll-snap-align: start; display: grid; gap: 10px; align-content: start; padding: 4px 22px 4px 10px; border-right: 1px dashed var(--line-2); }
+.shelf-day:last-child { border-right: 0; }
+.shelf-day.empty .shelf-row { align-items: stretch; }
+.shelf-none { display: grid; place-items: center; width: 104px; aspect-ratio: 3/4; border: 2px dashed var(--line-2); border-radius: 10px; color: var(--muted); font-size: 12.5px; text-align: center; text-decoration: none; line-height: 1.5; }
+.shelf-none:hover { color: var(--pri); border-color: var(--pri); }
+.shelf-date { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .shelf-date b { font-size: 15px; font-family: var(--num); }
-.shelf-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 22px; padding: 0 10px; }
+.shelf-row { display: flex; align-items: flex-start; gap: 12px 22px; }
 .shelf-subj { display: grid; gap: 8px; align-content: start; justify-items: start; max-width: 100%; }
 .shelf-subj-t { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
 .shelf-subj-t i { width: 10px; height: 10px; border-radius: 3px; background: var(--sc); }
@@ -1358,15 +1370,17 @@ input.switch:checked::after { left: 23px; }
 .pile:hover .book-cover, .pile.on .book-cover { transform: translateY(-3px); box-shadow: 0 6px 14px rgba(0,0,0,.14); }
 .pile.on .pile-layers::before, .pile.on .pile-layers::after { transform: translate(0, 0); opacity: 0; }
 /* the opened pile: a tray under the row, in the subject's colour */
-.pile-open { margin: 12px 10px 0; padding: 10px 12px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--sc); }
+.pile-open { margin: 0; padding: 10px 12px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--sc); }
 .pile-open-t { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .pile-open-t .btn.link { min-height: 0; padding: 0; }
-.shelf-board { height: 10px; margin-top: 12px; border-radius: 3px; background: linear-gradient(var(--line-2), var(--line)); box-shadow: 0 3px 4px rgba(0,0,0,.08); }
-[data-theme="night"] .shelf-board { box-shadow: 0 3px 6px rgba(0,0,0,.4); }
+[data-theme="night"] .shelf-track { box-shadow: 0 3px 6px rgba(0,0,0,.4); }
 [data-theme="night"] .book-cover, [data-theme="night"] .pile-layers::before, [data-theme="night"] .pile-layers::after { box-shadow: 0 2px 5px rgba(0,0,0,.4); }
 @media (max-width: 700px) {
-  .shelf-row { gap: 10px 14px; padding: 0 4px; }
-  .book, .pile { width: 84px; }
+  .shelf-row { gap: 10px 14px; }
+  .shelf-day { padding: 4px 14px 4px 4px; }
+  .shelf-arrow, .shelf-hint { display: none; }
+  .shelf-scroll { scroll-snap-type: x mandatory; }
+  .book, .pile, .shelf-none { width: 84px; }
   .book-t { font-size: 12px; }
-  .pile-open { margin: 10px 4px 0; padding: 8px 10px 10px; }
+  .pile-open { padding: 8px 10px 10px; }
 }
