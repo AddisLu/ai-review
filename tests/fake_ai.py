@@ -250,7 +250,7 @@ async def classify_exam(title, header, kinds):
     return next((k["id"] for k in kinds if k["name"][:2] in title), "")
 
 
-async def upgrade_question(qd, crop, figure):
+async def upgrade_question(qd, crop, figure, zhuyin=None):
     calls.append("upgrade")
     fig = bool(figure)
     return {"stem": (qd.get("stem") or "").strip() + "", "options": qd.get("options") or [],

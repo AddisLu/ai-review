@@ -1986,12 +1986,99 @@ async def upgrade_exam(job_id: int | None, exam_id: int, force: bool = False) ->
 
 async def upgrade_then_visuals_job(job_id: int, exam_id: int, qids: list[int]):
     n = await upgrade_exam(job_id, exam_id)
+    await zhuyin_after_upgrade(exam_id)
     jobs.start("visuals", exam_id, visuals_job, qids)
     return {"questions": n}
 
 
 async def upgrade_exam_job(job_id: int, exam_id: int):
     return {"questions": await upgrade_exam(job_id, exam_id)}
+
+
+# --- 補注音 --------------------------------------------------------------------------------------
+# A 低年級 paper prints 注音 beside every character (ai.detect_layout keeps that on the exam). The AI
+# that read it, or upgraded it, does not always write the marks; this pass adds them from the text
+# alone — the sentence tells how a character is read — so the Word / PDF look like the original.
+_CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_ZY_MARK = re.compile(r"\{([^{}|]+)\|[^{}]+\}")
+
+
+def zhuyin_missing(text) -> int:
+    """How many Chinese characters of a text are not inside a {字|注音} mark (math left out)."""
+    bare = _ZY_MARK.sub("", str(text or ""))
+    bare = re.sub(r"\$[^$]*\$", "", bare)
+    return len(_CJK.findall(bare))
+
+
+def _bare(text) -> str:
+    """The characters of a text without its 注音 marks and spaces: what must not change when marks are added."""
+    return re.sub(r"\s+", "", _ZY_MARK.sub(r"\1", str(text or "")))
+
+
+def _zhuyin_flag(exam_id: int):
+    e = db.one("SELECT options FROM exams WHERE id=?", (exam_id,))
+    opts = e["options"] if e and isinstance(e["options"], dict) else {}
+    return (opts.get("layout") or {}).get("zhuyin")
+
+
+ZHUYIN_BATCH = 8
+
+
+async def zhuyin_job(job_id: int | None, exam_id: int) -> dict:
+    """補注音 for one exam: every question whose stem or options still have bare characters."""
+    if not _zhuyin_flag(exam_id):
+        return {"skipped": "這份考卷沒有標記為有注音", "done": 0, "failed": 0, "total": 0}
+    qs = [{**q, "options": _as_list(q.get("options"))} for q in db.q("SELECT id, stem, options FROM questions WHERE exam_id=? ORDER BY seq, id", (exam_id,))]
+    qs = [q for q in qs if zhuyin_missing(q["stem"]) or any(zhuyin_missing(o) for o in q["options"])]
+    n, done, failed = len(qs), 0, 0
+    sem = asyncio.Semaphore(3)
+
+    async def batch(group: list[dict]):
+        nonlocal done, failed
+        async with sem:
+            try:
+                res = await ai.add_zhuyin([{"index": i, "stem": q["stem"], "options": q["options"]} for i, q in enumerate(group)])
+            except ai.AIError as err:
+                log.warning("zhuyin exam %s: %s", exam_id, err)
+                failed += len(group)
+                return
+            by = {}
+            for r in res:
+                try:
+                    by[int(r.get("index"))] = r
+                except (TypeError, ValueError):
+                    pass
+            for i, q in enumerate(group):
+                r = by.get(i) or {}
+                opts = [str(o) for o in (r.get("options") or [])]
+                # nothing but marks may change: the same characters, the same options in the same order
+                ok = (r.get("stem") and _bare(r["stem"]) == _bare(q["stem"]) and len(opts) == len(q["options"])
+                      and all(_bare(a) == _bare(b) for a, b in zip(opts, q["options"])))
+                if not ok:
+                    failed += 1
+                    continue
+                upd = {"stem": r["stem"], "updated_at": db.now()}
+                if q["options"]:
+                    upd["options"] = opts
+                db.update("questions", q["id"], upd)
+                done += 1
+            if job_id:
+                jobs.progress(job_id, int(100 * (done + failed) / max(1, n)), f"補注音 {done + failed}/{n} 題")
+
+    await asyncio.gather(*(batch(qs[i:i + ZHUYIN_BATCH]) for i in range(0, n, ZHUYIN_BATCH)))
+    if done:
+        from . import nas
+        nas.mark_dirty()
+    return {"done": done, "failed": failed, "total": n}
+
+
+async def zhuyin_after_upgrade(exam_id: int):
+    """After the upgrade of a 注音 paper: whatever the proofreading left bare gets its marks."""
+    if _zhuyin_flag(exam_id):
+        try:
+            await zhuyin_job(None, exam_id)
+        except Exception as err:  # noqa: BLE001 — a background nicety must never stop the rest
+            log.warning("zhuyin after upgrade %s: %s", exam_id, err)
 
 
 def _upgrading_pool() -> bool:

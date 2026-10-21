@@ -777,6 +777,7 @@ function resultCard(c, compact = false) {
         <button id="exregen">${icon('redo', 15)} 依範本重新產生 Word、解答、NAS</button>
         <button id="exup">${icon('bolt', 15)} AI 重新校對、重畫圖</button>
         <button id="exverify">${icon('search', 15)} AI 複查答案、詳解</button>
+        ${((exam.options || {}).layout || {}).zhuyin ? '<button id="exzy">ㄅㄆㄇ 補注音（缺注音的題目）</button>' : ''}
         <a href="#/templates">${icon('doc', 15)} 範本設定</a></div></details>` : ''}
     </div></div>`;
 }
@@ -817,6 +818,16 @@ async function bindResult(main) {
   if (up) up.onclick = async () => {
     if (!await confirmBox('AI 會對照原稿重新校對每一題、把圖重畫成 SVG（或做成表格），並重寫詳解。在背景進行，約每題半分鐘到一分鐘。', '開始')) return;
     try { await post('/api/exams/upgrade', { exam_id: exam.id, force: true }); toast('已開始，在背景進行；完成後題目和 Word／PDF 會自動更新', 'ok'); } catch (e) { errToast(e); }
+  };
+  const zy = $('#exzy');
+  if (zy) zy.onclick = async () => {
+    try {
+      const r = await post(`/api/exams/${exam.id}/zhuyin`);
+      toast('補注音中，在背景進行…', 'ok');
+      const res = await waitJob(r.job_id, (j) => { if (j.status === 'running') toast(j.message || '補注音中…'); });
+      toast(res.total ? `補好 ${res.done} 題的注音${res.failed ? `，${res.failed} 題沒成功（可以再按一次）` : ''}` : (res.skipped || '每一題都已經有注音了'), 'ok');
+      if (location.hash === `#/exam/${exam.id}`) load(main, exam.id);
+    } catch (e) { errToast(e); }
   };
   const vf = $('#exverify');
   if (vf) vf.onclick = async () => {

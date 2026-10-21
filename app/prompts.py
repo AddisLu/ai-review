@@ -684,6 +684,19 @@ UPGRADE_TASK = """附圖是一題考卷的原稿（高解析度裁切），下�
 先前辨識的內容：
 {question}"""
 
+# 補注音: a paper whose every character is printed with 注音, read without it — the text alone is marked
+ZHUYIN_SCHEMA = _obj({"items": {"type": "array", "items": _obj({
+    "index": {"type": "integer"}, "stem": {"type": "string"}, "options": {"type": "array", "items": {"type": "string"}}})}})
+
+ZHUYIN_TASK = """這份考卷的原稿每個國字旁邊都印有注音（低年級考卷）。下面幾題先前轉成文字時漏了注音，請把每一題的 stem 和每個選項補上注音：
+- 每個國字都用 {{字|注音}} 標示，一字一組（例如 {{角|ㄐㄧㄠˇ}}{{的|˙ㄉㄜ}}）；輕聲用 ˙ 放在最前面，二、三、四聲 ˊ ˇ ˋ 放在最後，一聲不加符號。
+- 已經有 {{字|注音}} 的字保留原樣。數字、英文字母、標點、（　　）、＿＿＿、□、$...$ 數學式、**粗體** 標記都原封不動，不要加注音。
+- 多音字依句意判斷（例如「長度」的長是 ㄔㄤˊ、「長大」的長是 ㄓㄤˇ；「的」是 ˙ㄉㄜ；「了」在句尾是 ˙ㄌㄜ；「一」依變調前的本調 ㄧ）。
+- 不要改任何字、不要增刪文字、不要改順序；options 的數量和順序要和原本一樣（沒有選項就給空陣列）。
+- index 照下面給的。
+
+{items}"""
+
 FIGURE_CHECK_SCHEMA = _obj({"same": {"type": "boolean"}, "problems": {"type": "array", "items": {"type": "string"}}})
 
 FIGURE_CHECK_TASK = """第一張是考卷原稿的圖，第二張是重新畫的 SVG 圖。請嚴格比對：數字、文字、標籤、①②③④ 編號、線條連接、

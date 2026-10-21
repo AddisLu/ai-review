@@ -799,6 +799,15 @@ async def upgrade_question(qd: dict, crop: bytes, figure: bytes | None, zhuyin: 
     return await call_json("upgrade", content, prompts.UPGRADE_SCHEMA, effort=setting("effort_solve"), max_tokens=32000)
 
 
+async def add_zhuyin(items: list[dict]) -> list[dict]:
+    """補注音: {字|注音} on every character of these stems and options — from the text alone, no picture."""
+    text = "\n".join(f"[{it['index']}] {it['stem']}" + "".join(f"\n  選項{i}：{o}" for i, o in enumerate(it.get("options") or [], 1))
+                     for it in items)
+    res = await call_json("zhuyin", [{"type": "text", "text": prompts.ZHUYIN_TASK.format(items=text)}], prompts.ZHUYIN_SCHEMA,
+                          effort="medium", max_tokens=16000)
+    return res.get("items") or []
+
+
 async def verify_answers(items: list[dict], images: list[bytes]) -> list[dict]:
     """答案複查: each question solved again from its own photo by a second look that is told not to
     trust the answer it has, then compared with it. items: [{index, qtype, stem, options, answer,

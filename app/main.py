@@ -1167,6 +1167,15 @@ async def exams_upgrade(body: dict, request: Request):
     return {"job_id": ahead(("upgrade_all",), "upgrade_all", 0, pipeline.upgrade_all_job, bool(body.get("force")))}
 
 
+@app.post("/api/exams/{exam_id}/zhuyin")
+async def exam_zhuyin(exam_id: int, request: Request):
+    """補注音: a paper printed with 注音 on every character gets the marks on every question whose
+    text still lacks them — from the text alone, in the background."""
+    own_exam(request, exam_id)
+    need_ai()
+    return {"job_id": ahead(("zhuyin", exam_id), "zhuyin", exam_id, pipeline.zhuyin_job, exam_id)}
+
+
 @app.post("/api/exams/{exam_id}/priority")
 async def exam_priority(exam_id: int, request: Request):
     """優先升級: this exam's questions go first (the running sessions pick them up next)."""
