@@ -448,9 +448,11 @@ export async function openCamera({ onShot, onFix = null, onDrop = null, count = 
   let shotSig = null, shotPage = null, changed = true, curOk = false, unsettled = 0, lastGuide = null;  // after a shot: wait for the next page before 自動拍
   // focus: the first page used to come out blurred — 自動拍 fired a second after the camera opened,
   // before the lens had focused on the sheet (every page after it was at the same distance, so sharp).
-  // The sheet's middle is measured each frame the way the Pi measures the photo (scanner.sharpness):
-  // the shot waits until it is sharp and has stopped getting sharper (the lens settled)
-  const FOCUS_MIN = 7, FW = 360, camStart = performance.now();
+  // The sheet's middle is measured (every other frame, at 240 px: cheap enough for an old tablet) the way
+  // the Pi measures the photo (scanner.sharpness): the shot waits until the lens has stopped getting
+  // sharper. FOCUS_MIN is asked only in the first 1.5 s the sheet is still — a page with little print
+  // never reads 7, and the Pi takes a blurred photo back anyway (settle)
+  const FOCUS_MIN = 7, FW = 240, camStart = performance.now();
   const fc = document.createElement('canvas'); fc.width = fc.height = FW;
   const fctx = fc.getContext('2d', { willReadFrequently: true });
   fctx.imageSmoothingQuality = 'high';  // shrunk with averaging, as the Pi does (plain sampling keeps sensor noise: reads sharper)
@@ -581,19 +583,23 @@ export async function openCamera({ onShot, onFix = null, onDrop = null, count = 
         const problem = problemOf(res);
         const pts = res.quad.map(([x, y]) => [ox + x * dw, oy + y * dh]);
         const moved = last ? Math.max(...res.quad.map((p, i) => Math.hypot(p[0] - last[i][0], p[1] - last[i][1]))) : 1;
-        if (moved > 0.015) stableSince = now;
+        if (moved > 0.03) stableSince = now;  // a hand-held phone jitters: 3% of the frame still counts as still
         last = res.quad;
-        const still = now - stableSince > 500;
+        const still = now - stableSince > 400;
         ok = !problem;
         // in focus: sharp, and as sharp as it has been for the last while (the lens is not still moving)
-        let focus = 0;
+        let focus = focusHist.length ? focusHist[focusHist.length - 1][1] : 0;
         if (ok && !shooting) {
-          focus = focusOf(res.quad);
-          focusHist.push([now, focus]);
+          if (frames % 2 === 0 || !focusHist.length) { focus = focusOf(res.quad); focusHist.push([now, focus]); }
           focusHist = focusHist.filter(([t]) => now - t < 2000);
-          const recent = focusHist.filter(([t]) => now - t < 600).map(([, v]) => v);
-          const best = Math.max(...focusHist.map(([, v]) => v));
-          focused = focus >= FOCUS_MIN && recent.length >= 2 && Math.min(...recent) >= 0.85 * best && now - camStart > 1500;
+          const median = (a) => { const b = [...a].sort((x, y) => x - y); return b.length ? b[b.length >> 1] : 0; };
+          const recent = median(focusHist.filter(([t]) => now - t < 600).map(([, v]) => v));
+          const before = median(focusHist.filter(([t]) => now - t >= 600 && now - t < 1500).map(([, v]) => v));
+          // the lens settled: no sharper than it was a moment ago (within 10%); sharp enough: 7, or the sheet
+          // has been still for 1.5 s already (little print on it reads lower, yet it is as sharp as it gets)
+          const settled = before > 0 && recent <= 1.1 * before;
+          const sharpEnough = recent >= FOCUS_MIN || now - stableSince > 1500;
+          focused = recent > 0 && settled && sharpEnough && now - camStart > 1500;
           el.dataset.focus = focus.toFixed(1);
         } else if (!ok) { focusHist = []; focused = false; }
         const lensBusy = ok && still && !focused;
@@ -601,20 +607,23 @@ export async function openCamera({ onShot, onFix = null, onDrop = null, count = 
         ctx.strokeStyle = ok ? '#22C55E' : '#E5281A'; ctx.lineWidth = ok ? 3 : 5;
         ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.fill(); ctx.stroke();
         hint.textContent = !ok ? `拍攝 NG：${problem}` : !still ? '拿穩…'
-          : lensBusy ? (focus < FOCUS_MIN && now - stableSince > 3000 ? '畫面模糊：手機拿遠一點再靠近，讓它重新對焦' : '對焦中…')
+          : lensBusy ? '對焦中…'
           : `抓到了${pages === 'double' ? '（雙頁）' : ''}，${mode.autoShot ? '拍照中…' : '可以拍了'}`;
+        // the next page is told by what is printed on it, never by the view moving: re-aiming over the
+        // page just taken, or a hand passing, used to count as a new page (the same page photographed
+        // twice). Only while the print cannot be compared (no outline, no shot yet) does motion count
+        const samePrint = ok && shotPage ? sigDiff(pageSig(fpx, sw, sh, res.quad), shotPage) <= 12 : null;
         if (shotSig && !changed) {
-          // the next page: the view changed, or a hand / a page turning was in view for a moment
-          // (a few NG or moving frames), or what is printed on the sheet is different
           unsettled = (!ok || moved > 0.03) ? unsettled + 1 : Math.max(0, unsettled - 1);
-          if (moved > 0.05 || unsettled >= 3 || sigDiff(sig(), shotSig) > 10
-              || (ok && shotPage && sigDiff(pageSig(fpx, sw, sh, res.quad), shotPage) > 12)) changed = true;
+          if (samePrint === false || (samePrint === null && (moved > 0.05 || unsettled >= 3 || sigDiff(sig(), shotSig) > 10))) changed = true;
         }
         if (blurHold && (moved > 0.05 || (shotSig && sigDiff(sig(), shotSig) > 10))) { blurHold = false; blurShots = 0; }  // re-aimed
         curOk = ok;
         el.dataset.pdiff = shotPage && res.quad ? sigDiff(pageSig(fpx, sw, sh, res.quad), shotPage).toFixed(1) : '';
-        if (ok && still && focused && mode.autoShot && changed && !shooting && !blurHold && now - stableSince > 900) shoot();
-        else if (ok && still && mode.autoShot && !changed) hint.textContent = '這頁拍好了・換下一頁（或按快門再拍一次）';
+        const steady = now - stableSince;
+        const newPage = changed && samePrint !== true;  // changed by motion, yet the same print is back in view: not a new page
+        if (ok && still && mode.autoShot && newPage && !shooting && !blurHold && ((focused && steady > 800) || steady > 2500)) shoot(false, steady > 2500);
+        else if (ok && still && mode.autoShot && !newPage) hint.textContent = '這頁拍好了・換下一頁（或按快門再拍一次）';
         else if (ok && still && mode.autoShot && blurHold) hint.textContent = '拍了幾次都模糊：手機拿遠一點再靠近重新對焦（或按快門直接用這張）';
       } else {
         last = null; changed = true; curOk = false; unsettled = 0; focusHist = []; focused = false;
@@ -655,12 +664,12 @@ export async function openCamera({ onShot, onFix = null, onDrop = null, count = 
   const countText = () => { el.querySelector('.cam-done b').textContent = n ? `（${n} 頁）` : ''; };
   let uploads = Promise.resolve(), gateMiss = 0;  // the shots go up one after another, in order, while the camera goes on
   const upload = (file, info) => (uploads = uploads.then(() => onShot(file, info)).catch(() => null));
-  async function shoot(manual = false) {
+  async function shoot(manual = false, force = false) {
     if (shooting || !video.videoWidth) return;
     shooting = true;
     const quad = last, pages = el.dataset.pages, orient = el.dataset.orient, okAtShot = curOk;
     grab();
-    if (quad && okAtShot && !manual) {
+    if (quad && okAtShot && !manual && !force) {
       // the frame taken is about as sharp as the sheet has looked (not one caught mid-move): else the
       // next one — but not for ever (the copy reads a little differently from the live video)
       const best = Math.max(0, ...focusHist.map(([, v]) => v));
