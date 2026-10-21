@@ -15,6 +15,10 @@ export function leadHtml(q, imgStyle = '') {
 
 export function answerBlock(q, open = false) {
   if (!q.solved) return '<div class="small muted" style="margin-top:8px">⏳ 還沒有詳解</div>';
+  if (q._lite && !open) {  // from a lite list: the long parts come when this is opened (bindQuestionCards)
+    return `<details class="explain" data-lazy="${q.id}"><summary>答案與詳解</summary>
+      <div style="margin-top:8px"><div class="answer-line">答案：${rich(q.answer)}</div><span class="spinner"></span></div></details>`;
+  }
   return `<details class="explain" ${open ? 'open' : ''}><summary>答案與詳解</summary>
     <div style="margin-top:8px">
     <div class="answer-line">答案：${rich(q.answer)}</div>
@@ -67,6 +71,18 @@ export function questionCard(q, { selectable = false, selected = false, showAnsw
 export function bindQuestionCards(root, getQ, reload) {
   root.querySelectorAll('.q-card').forEach((card) => {
     const id = Number(card.dataset.qid);
+    const lazy = card.querySelector('details[data-lazy]');
+    if (lazy) lazy.addEventListener('toggle', async () => {
+      if (!lazy.open || lazy.dataset.done) return;
+      lazy.dataset.done = '1';
+      const q = getQ(id);
+      try {
+        Object.assign(q, await get(`/api/questions/${id}`));
+        delete q._lite;
+        lazy.outerHTML = answerBlock(q, true);
+        typeset(card);
+      } catch (e) { errToast(e); }
+    }, { once: false });
     card.querySelectorAll('[data-flag]').forEach((b) => b.onclick = async () => {
       const q = getQ(id);
       const f = b.dataset.flag;

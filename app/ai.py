@@ -101,6 +101,14 @@ def touch():
     _lanes.seen = time.monotonic()
 
 
+async def wait_quiet(idle: float = 15.0, max_wait: float = 600.0):
+    """Heavy background work (rendering pages with Chromium) waits for a moment with nobody tapping —
+    at most max_wait, so a busy evening does not stall it for ever."""
+    t0 = time.monotonic()
+    while time.monotonic() - _lanes.seen < idle and time.monotonic() - t0 < max_wait:
+        await asyncio.sleep(3)
+
+
 class AIError(Exception):
     pass
 
@@ -142,7 +150,7 @@ def _system():
 
 def _log_usage_dict(task, model, u: dict):
     try:
-        db.insert("ai_usage", {"task": task, "model": model,
+        db.insert_later("ai_usage", {"task": task, "model": model,
                                "input_tokens": (u.get("input_tokens") or 0) + (u.get("cache_creation_input_tokens") or 0),
                                "output_tokens": u.get("output_tokens") or 0,
                                "cache_read": u.get("cache_read_input_tokens") or 0,

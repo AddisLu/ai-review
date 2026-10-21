@@ -1,5 +1,5 @@
 import { get, post, qs, state } from '../api.js';
-import { $$, $, confirmBox, debounce, esc, html, icon, modal, subjectIcon, toast } from '../ui.js';
+import { $$, $, confirmBox, debounce, esc, html, icon, modal, renderList as chunked, subjectIcon, toast } from '../ui.js';
 import { bindQuestionCards, editQuestion, makePaper, questionCard } from './common.js';
 
 const F = {
@@ -143,20 +143,25 @@ async function load() {
   if (!el) return;
   if (view === 'tree') return loadTree(el);
   if (view === 'matrix') return loadMatrix(el);
-  const r = await get('/api/questions' + qs({ ...F, limit: 300 }));
+  // lite: the long parts (詳解、圖…) are fetched when a card's 答案與詳解 is opened (common.js)
+  const r = await get('/api/questions' + qs({ ...F, limit: 300, lite: 1 }));
   items = r.items;
   html(el, `<div class="row" style="margin:6px 0 10px"><span class="sub">共 ${r.total} 題</span><span class="spacer"></span>
-    <button class="btn sm ghost" id="selall">全選</button></div>
-    ${items.length ? items.map((q) => questionCard(q, { selectable: true, selected: sel.has(q.id) })).join('')
-      : '<div class="empty">這裡沒有題目</div>'}`);
-  el.querySelectorAll('[data-sel]').forEach((b) => b.onchange = () => {
-    const id = Number(b.dataset.sel);
-    b.checked ? sel.add(id) : sel.delete(id);
-    b.closest('.q-card').classList.toggle('sel', b.checked);
-    bar();
+    <button class="btn sm ghost" id="selall">全選</button></div><div id="qcards"></div>`);
+  const getQ = (id) => items.find((q) => q.id === id);
+  chunked($('#qcards'), items, (q) => questionCard(q, { selectable: true, selected: sel.has(q.id) }), {
+    first: 30, step: 40, empty: '<div class="empty">這裡沒有題目</div>',
+    bind: (chunk) => {
+      chunk.querySelectorAll('[data-sel]').forEach((b) => b.onchange = () => {
+        const id = Number(b.dataset.sel);
+        b.checked ? sel.add(id) : sel.delete(id);
+        b.closest('.q-card').classList.toggle('sel', b.checked);
+        bar();
+      });
+      bindQuestionCards(chunk, getQ, load);
+    },
   });
   $('#selall').onclick = () => { items.forEach((q) => sel.add(q.id)); load(); };
-  bindQuestionCards(el, (id) => items.find((q) => q.id === id), load);
   bar();
 }
 

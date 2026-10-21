@@ -2107,6 +2107,7 @@ async def _page_regenerated(exam: dict, page: dict, ids: list[int]) -> list[byte
 
 async def _check_page(exam: dict, page: dict, qs: list[dict]) -> dict:
     """{question id: problems} for the questions of a page that differ from the photo."""
+    await ai.wait_quiet()  # Chromium and pdftoppm take the Pi's cores: not while someone is using the site
     regen = await _page_regenerated(exam, page, [q["id"] for q in qs])
     if not regen:
         return {}

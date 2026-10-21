@@ -256,7 +256,8 @@ label.field > span { display: block; font-size: 13px; font-weight: 700; color: v
 .exam-card .pic { width: 44px; height: 58px; border-radius: 6px; background: var(--sunk) center/cover; flex-shrink: 0; border: 1px solid var(--line); }
 
 /* ===== questions ===== */
-.q-card { position: relative; cursor: default; }
+.q-card { position: relative; cursor: default; content-visibility: auto; contain-intrinsic-size: auto 180px; }
+.list-tail { padding: 14px; text-align: center; }
 .q-card.sel { border: 1.5px solid var(--pri); }
 .q-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .q-num { font-family: var(--num); font-weight: 800; color: var(--pri); font-size: 16px; }
@@ -913,6 +914,7 @@ details.xmenu:last-of-type .xmenu-list { left: auto; right: 0; }
 .bk-sort select { width: auto; min-height: 36px; font-size: 14px; }
 .pk-list { display: grid; gap: 6px; padding-bottom: 90px; }
 .pk-row { display: flex; align-items: center; gap: 12px; padding: 10px 6px 10px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; cursor: pointer; user-select: none; -webkit-user-select: none; }
+.pk-row { content-visibility: auto; contain-intrinsic-size: auto 64px; }  /* rows off screen cost nothing until scrolled to */
 .pk-row:hover { border-color: var(--line-2); }
 .pk-row.on { border-color: var(--pri); background: var(--pri-soft); }
 .pk-box { flex: 0 0 24px; height: 24px; border-radius: 7px; border: 2px solid var(--line-2); display: grid; place-items: center; color: #fff; }

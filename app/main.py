@@ -30,6 +30,7 @@ VERSION = "1.0.0"
 @asynccontextmanager
 async def _lifespan(app):
     import asyncio
+    db.mark_loop_thread()  # writes nobody waits for leave this thread (db.execute_later)
     db.mark_interrupted()  # the server is (re)starting: nothing of the old process is still running
     # an exam's diagrams cut off by a restart carry on where they stopped, once
     cut = db.q("SELECT id, ref_id FROM jobs WHERE kind='visuals' AND status='error' AND message LIKE '伺服器重新啟動%'")
@@ -279,6 +280,7 @@ async def auth(request: Request, call_next):
         request.state.user = user
         if user and not local and not path.startswith(("/api/jobs/", "/api/upgrade/status", "/api/pads/active", "/media")):
             ai.touch()  # someone is using the site: background AI work steps back
+            db.touch()
         if not path.startswith(OPEN_PATHS) and not local:
             if not _site_ok(request) or not user:
                 return JSONResponse({"detail": "請先登入"}, status_code=401)
@@ -909,6 +911,11 @@ async def scan_check(file: UploadFile = File(...), hint: str = Form("")):
     img = cv2.imdecode(np.frombuffer(await file.read(), np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         raise HTTPException(400, "看不懂這張照片")
+    # the outline and focus are judged at 1000 px anyway: a 3000 px photo only made the check 3× slower
+    # (1.2 s between a shot and the next) — the corners come back as 0..1, so the size does not matter
+    s = 1600 / max(img.shape[:2])
+    if s < 1:
+        img = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
     h = None
     try:
         h = _clean_corners(json.loads(hint)) if hint else None
@@ -1455,6 +1462,11 @@ async def list_questions(request: Request):
     total = db.scalar(f"SELECT COUNT(*) FROM {V} WHERE {where}", me + args)
     rows = db.q(f"SELECT * FROM {V} WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?",
                 me + args + [limit, offset])
+    if p.get("lite"):  # a list: the long parts (詳解、圖、提示…) come when a card is opened
+        for q in rows:
+            for k in HEAVY_Q:
+                q.pop(k, None)
+            q["_lite"] = True
     return {"total": total, "items": _with_chapter(rows)}
 
 

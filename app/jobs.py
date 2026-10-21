@@ -27,8 +27,8 @@ def progress(job_id: int, pct: int, message: str = ""):
     if last and now - last[0] < 1.0 and last[1] == message:  # the same step again within a second: skip
         return
     _last_progress[job_id] = (now, message)
-    db.update("jobs", job_id, {"status": "running", "progress": pct, "message": message,
-                               "updated_at": db.now()})
+    db.update_later("jobs", job_id, {"status": "running", "progress": pct, "message": message,  # never waits on the SD card
+                                     "updated_at": db.now()})
 
 
 # got ready before she taps (換個方法解說, an example, why it went wrong, 觀念圖解…): in the front lane
@@ -48,17 +48,19 @@ def start(kind: str, ref_id: int, fn, *args) -> int:
             ai.background.set(True)
         elif kind in SOON_KINDS:  # made ahead of a tap that may come: never in the way of a question asked now
             ai.soon.set(True)
+        # every write to the job's row goes through db.update_later: one thread, in order — a progress
+        # write that was still queued can never land after 完成 and flip the job back to 進行中
         try:
             progress(job_id, 1, "開始處理…")
             result = await fn(job_id, *args)
-            db.update("jobs", job_id, {"status": "done", "progress": 100, "message": "完成",
+            db.update_later("jobs", job_id, {"status": "done", "progress": 100, "message": "完成",
                                        "result": json.dumps(result or {}, ensure_ascii=False),
                                        "updated_at": db.now()})
         except AIError as e:
-            db.update("jobs", job_id, {"status": "error", "message": str(e), "updated_at": db.now()})
+            db.update_later("jobs", job_id, {"status": "error", "message": str(e), "updated_at": db.now()})
         except Exception as e:  # keep the server alive, surface the error
             log.error("job %s failed: %s", job_id, traceback.format_exc())
-            db.update("jobs", job_id, {"status": "error", "message": f"處理失敗：{e}",
+            db.update_later("jobs", job_id, {"status": "error", "message": f"處理失敗：{e}",
                                        "updated_at": db.now()})
 
     t = asyncio.get_running_loop().create_task(runner())

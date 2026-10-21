@@ -281,7 +281,7 @@ async function showList() {
         onDelete: () => { fetchList(); changed(); },
       });
       const fetchList = async (more = false) => {
-        const r = await get('/api/questions' + qs({ ...params(), sort, limit: PAGE, offset: more ? items.length : 0 }));
+        const r = await get('/api/questions' + qs({ ...params(), sort, limit: PAGE, offset: more ? items.length : 0, lite: 1 }));
         items = more ? items.concat(r.items) : r.items;
         total = r.total;
         html(list, items.map((q) => rowHtml(q, exams, sel)).join('') || '<div class="empty">沒有題目</div>');

@@ -1,5 +1,6 @@
 """SQLite storage. One connection per call; WAL mode lets the web server and
 background jobs read and write at the same time."""
+import concurrent.futures
 import json
 import sqlite3
 import threading
@@ -368,6 +369,60 @@ _ckpt_started = False
 _last_write = [0.0]  # when something was last committed (the checkpointer waits for a quiet moment)
 
 
+# The server's main thread (the event loop) must never wait on the SD card: while it does, every
+# page of every person waits with it. A write nobody waits for (a job's progress, a usage row) is
+# handed to one writer thread, in order; the thread may stall on the card, the pages do not.
+_bg = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="db-writer")
+_loop_thread = [0]
+activity = [0.0]  # when a person last used the site (main.py's middleware): the checkpoint waits for a quiet moment
+
+
+def mark_loop_thread():
+    _loop_thread[0] = threading.get_ident()
+
+
+def on_loop_thread() -> bool:
+    return threading.get_ident() == _loop_thread[0]
+
+
+def touch():
+    activity[0] = time.monotonic()
+
+
+def _bg_execute(sql, args):
+    try:
+        execute(sql, args)
+    except Exception:
+        import logging
+        logging.getLogger("db").exception("background write failed: %s", sql[:80])
+
+
+def execute_later(sql: str, args=()):
+    """A write nobody waits for: done on the writer thread when called from the server's main thread
+    (in order with the others), at once anywhere else."""
+    if on_loop_thread():
+        _bg.submit(_bg_execute, sql, list(args))
+    else:
+        execute(sql, args)
+
+
+def update_later(table: str, row_id: int, data: dict):
+    if not data:
+        return
+    keys = list(data.keys())
+    execute_later(f"UPDATE {table} SET {','.join(k + '=?' for k in keys)} WHERE id=?", [_enc(data[k]) for k in keys] + [row_id])
+
+
+def insert_later(table: str, data: dict):
+    keys = list(data.keys())
+    execute_later(f"INSERT INTO {table}({','.join(keys)}) VALUES({','.join('?' * len(keys))})", [_enc(data[k]) for k in keys])
+
+
+def flush_later(timeout: float = 10.0):
+    """Wait for the writer thread's queue (tests, a shutdown)."""
+    _bg.submit(lambda: None).result(timeout=timeout)
+
+
 def _start_checkpointer():
     global _ckpt_started
     if _ckpt_started:
@@ -383,7 +438,14 @@ def _start_checkpointer():
             _t.sleep(1)
             now = _t.monotonic()
             quiet = now - _last_write[0] > 2.5
-            if not ((quiet and now - last > 5) or now - last > 120):
+            # and nobody tapping for a while: a checkpoint's write-back to the SD card slows every
+            # page while it runs — unless the WAL has grown large, then at the latest every 2 minutes
+            nobody = now - activity[0] > 20
+            try:
+                big = (DB_PATH.parent / (DB_PATH.name + "-wal")).stat().st_size > 64 * 1024 * 1024
+            except OSError:
+                big = False
+            if not ((quiet and nobody and now - last > 5) or (big and quiet and now - last > 5) or now - last > 120):
                 continue
             last = now
             try:

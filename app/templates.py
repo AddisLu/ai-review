@@ -693,7 +693,7 @@ async def pdf_pages(pdf: Path, dpi: int = 110) -> list[Path]:
     prefix = pdf.with_name(pdf.stem + f"_p{dpi}")
     for old in pdf.parent.glob(prefix.name + "-*.png"):
         old.unlink()
-    proc = await asyncio.create_subprocess_exec("pdftoppm", "-r", str(dpi), "-png", str(pdf), str(prefix),
+    proc = await asyncio.create_subprocess_exec("ionice", "-c", "3", "nice", "-n", "10", "pdftoppm", "-r", str(dpi), "-png", str(pdf), str(prefix),
                                                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
     await asyncio.wait_for(proc.wait(), timeout=120)
     return sorted(pdf.parent.glob(prefix.name + "-*.png"), key=lambda p: int(re.search(r"-(\d+)\.png$", p.name).group(1)))

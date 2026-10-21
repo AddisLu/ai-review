@@ -167,7 +167,7 @@ def chrome_cmd(exe: str, who: str) -> list[str]:
     cache in RAM instead of on the Pi's slow SD card. `who`: one profile per concurrent user."""
     shm = Path("/dev/shm") if Path("/dev/shm").is_dir() else Path(tempfile.gettempdir())
     d = shm / f"ai-review-chrome-{who}"
-    return ["nice", "-n", "10", exe, f"--user-data-dir={d}", f"--disk-cache-dir={d}/cache"]
+    return ["ionice", "-c", "3", "nice", "-n", "10", exe, f"--user-data-dir={d}", f"--disk-cache-dir={d}/cache"]
 
 
 def _chromium() -> str | None:

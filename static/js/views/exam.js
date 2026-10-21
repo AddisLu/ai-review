@@ -1,5 +1,5 @@
 import { api, del, get, mediaUrl, parentNow, post, put, state, thumbUrl, waitJob } from '../api.js';
-import { $, $$, busy, confirmBox, debounce, errToast, esc, html, icon, localDay, modal, promptBox, rich, subjectIcon, toast } from '../ui.js';
+import { $, $$, busy, confirmBox, debounce, errToast, esc, html, icon, localDay, modal, promptBox, renderList, rich, subjectIcon, toast } from '../ui.js';
 import { WRONG_PAPER, bindQuestionCards, editQuestion, makePaper, questionCard, runJob } from './common.js';
 import { bindPicker, rowHtml } from './picker.js';
 
@@ -478,7 +478,7 @@ function drawQuestions(main, c) {
       : `${q.stem} ${q.unit || ''} ${q.chapter_label || ''} ${q.qtype || ''} ${q.answer || ''}`.toLowerCase().includes(w)));
     list = exam.questions.filter(FILTERS[filter]).filter(match);
     $('#exn').textContent = `${list.length} 題`;
-    html($('#qlist'), list.map((q) => rowHtml(q, {}, sel)).join('') || '<div class="empty">找不到符合的題目</div>');
+    renderList($('#qlist'), list, (q) => rowHtml(q, {}, sel), { first: 40, step: 60, empty: '<div class="empty">找不到符合的題目</div>' });
     $('#selall').textContent = list.length && list.every((q) => sel.has(q.id)) ? '取消全選' : '全選';
   };
   const q = $('#exq');

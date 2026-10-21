@@ -140,7 +140,7 @@ def test_scene_picture_is_kept(client):
     q = next(q for q in client.get(f"/api/exams/{eid}").json()["questions"] if q.get("figure_path"))
     real = ai.upgrade_question
 
-    async def photo(qd, crop, figure):
+    async def photo(qd, crop, figure, zhuyin=None, hint=None):
         r = await real(qd, crop, figure)
         return {**r, "figure_kind": "image", "svg": ""}
     ai.upgrade_question = photo

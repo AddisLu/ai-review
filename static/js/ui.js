@@ -64,6 +64,40 @@ export function html(el, markup) {
   return el;
 }
 
+// A long list (249 questions, 300 cards) drawn a chunk at a time: the first rows at once, the next
+// ones as the end scrolls near — a phone no longer builds 25 000 nodes before it can show anything.
+// bind(chunkEl) wires the rows just added; empty: what to show when there is nothing.
+export function renderList(el, items, row, { first = 40, step = 40, bind = null, empty = '' } = {}) {
+  if (el._more) { el._more.disconnect(); el._more = null; }
+  if (!items.length) { el.innerHTML = empty; return; }
+  el.innerHTML = '';
+  let i = 0;
+  const add = (n) => {
+    const frag = document.createElement('div');
+    frag.className = 'list-chunk';
+    frag.innerHTML = items.slice(i, i + n).map(row).join('');
+    i += n;
+    el.appendChild(frag);
+    typeset(frag);
+    if (bind) bind(frag);
+  };
+  add(first);
+  if (i >= items.length) return;
+  const tail = document.createElement('div');
+  tail.className = 'list-tail';
+  tail.innerHTML = `<span class="small muted">還有 ${items.length - i} 題…</span>`;
+  el.appendChild(tail);
+  const io = new IntersectionObserver((es) => {
+    if (!es.some((e) => e.isIntersecting)) return;
+    add(step);
+    if (i >= items.length) { io.disconnect(); el._more = null; tail.remove(); return; }
+    tail.querySelector('span').textContent = `還有 ${items.length - i} 題…`;
+    el.appendChild(tail);  // stays last
+  }, { rootMargin: '600px' });
+  io.observe(tail);
+  el._more = io;
+}
+
 export function toast(msg, kind = '', action = null) {
   const t = document.createElement('div');
   t.className = 'toast ' + kind;
