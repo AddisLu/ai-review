@@ -49,7 +49,7 @@ function dayLabel(d) {
 }
 
 let examQ = '';
-// the piles opened on the 書櫃 (day|subject), kept while the tab is open
+// the pile opened on the 書櫃 (day|subject; at most one), kept while the tab is open
 let openPiles = (() => { try { return new Set(JSON.parse(sessionStorage.getItem('examPiles') || '[]')); } catch { return new Set(); } })();
 // 已拍的考卷 filters: tap chips (several in one row = any of them); every count is what tapping gives
 const EF0 = () => ({ kid: [], subject: [], school: [], kind: [], mode: [], bank: [], time: '', fix: false });
@@ -178,13 +178,12 @@ export async function loadExams() {
     return `<section class="shelf-day" data-day="${d}"><div class="shelf-date"><b>${dayLabel(d)}</b><span class="small muted">${n} 份</span></div>
       <div class="shelf-row">${row}</div></section>`;
   };
-  // the piles that are open: a tray under the shelf, one per pile (day + subject), so sliding the shelf is never interrupted
+  // the open pile: just its books in a tray under the shelf (tap the pile again to put them back)
   const trays = [...openPiles].map((k) => {
     const [d, sj] = k.split('|');
     const list = shelves.has(d) && shelves.get(d).get(sj);
     if (!list || list.length < 2) return '';
-    return `<div class="pile-open" style="--sc:${subjectColor(sj)}"><div class="pile-open-t"><div class="shelf-subj-t"><i></i>${dayLabel(d)}・${esc(sj)}<span>${list.length}</span></div><button class="btn link sm" data-pile="${esc(k)}">收起</button></div>
-      <div class="books">${sorted(list).map(book).join('')}</div></div>`;
+    return `<div class="pile-open" style="--sc:${subjectColor(sj)}" aria-label="${esc(dayLabel(d))} ${esc(sj)}"><div class="books">${sorted(list).map(book).join('')}</div></div>`;
   }).join('');
   const today = localDay();
   const days = [...shelves.keys()].sort((a, b) => (a < b ? 1 : -1));
@@ -213,8 +212,9 @@ export async function loadExams() {
     c.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); c.click(); } };
   });
   el.querySelectorAll('[data-pile]').forEach((b) => b.onclick = () => {
-    const k = b.dataset.pile;
-    openPiles.has(k) ? openPiles.delete(k) : openPiles.add(k);
+    const k = b.dataset.pile, was = openPiles.has(k);
+    openPiles.clear();              // one pile open at a time: tapping 數學 shows 數學 only
+    if (!was) openPiles.add(k);
     try { sessionStorage.setItem('examPiles', JSON.stringify([...openPiles])); } catch { /* private mode */ }
     loadExams();
   });
